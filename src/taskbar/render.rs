@@ -653,64 +653,50 @@ impl Renderer {
         } else {
             (metrics.inner() * 0.53).clamp(14.0, 21.0)
         };
-        let caption_font = metrics.line_font().min(11.0);
         let mut number = self.pace_line(&pace.value, font)?;
-        // Fixed numeric columns: reserve the width of the largest signed value.
+        // Reserve a stable numeric column, so the bar does not jump as digits change.
         number.width = self.pace_line("+100", font)?.width;
-        let mut lines = vec![vec![
-            (
-                self.line("PACE", caption_font, Weight::Regular)?,
-                Tone::Secondary,
-            ),
-            (number, Tone::Tint(pace.color)),
-        ]];
-        if pace.secondary {
-            let mut remaining = self.line(&pace.remaining, caption_font, Weight::Regular)?;
-            remaining.width = self
-                .line("100% left *", caption_font, Weight::Regular)?
-                .width;
-            let mut runs = vec![
-                (
-                    self.line("WEEK", caption_font, Weight::Regular)?,
-                    Tone::Secondary,
-                ),
-                (remaining, Tone::Secondary),
-            ];
-            if let Some(countdown) = &pace.countdown {
-                let mut reset =
-                    self.line(&format!("· {countdown}"), caption_font, Weight::Regular)?;
-                reset.width = self.line("· 6d 23h", caption_font, Weight::Regular)?.width;
-                runs.push((reset, Tone::Secondary));
-            }
-            lines.push(runs);
-        }
+        let show_bar = pace.secondary && pace.bar_width > 0.0;
+        let row = view.rows.first();
+        let bar_color = if pace.value == "—" {
+            [128, 128, 128]
+        } else {
+            pace.color
+        };
+        let marker = row.and_then(|row| row.pace);
         if metrics.vertical {
-            // A vertical taskbar is narrow: stack the label and number; retain pace.
             let mut y = PAD_VERTICAL;
-            let mut vertical = vec![
-                vec![(
-                    self.line("PACE", caption_font, Weight::Regular)?,
-                    Tone::Secondary,
-                )],
-                vec![(self.pace_line(&pace.value, font)?, Tone::Tint(pace.color))],
-            ];
-            if pace.secondary {
-                vertical.push(vec![(
-                    self.line(&pace.remaining, 9.0, Weight::Regular)?,
-                    Tone::Secondary,
-                )]);
-            }
-            for runs in vertical {
-                let width = runs_width(&runs);
-                let height = runs_height(&runs);
-                Self::place_runs(
-                    runs,
-                    (metrics.thickness - width).max(0.0) / 2.0,
+            if let Some(icon) = view.icon.clone() {
+                let size = Self::icon_size(metrics);
+                prims.push(Prim::Icon {
+                    icon,
+                    x: (metrics.thickness - size) / 2.0,
                     y,
-                    height,
-                    &mut prims,
-                );
-                y += height;
+                    size,
+                });
+                y += size + 6.0;
+            }
+            let height = number.height;
+            Self::place_runs(
+                vec![(number, Tone::Tint(pace.color))],
+                (metrics.thickness - self.pace_line("+100", font)?.width).max(0.0) / 2.0,
+                y,
+                height,
+                &mut prims,
+            );
+            y += height;
+            if show_bar {
+                let width = pace.bar_width.min((metrics.thickness - 16.0).max(16.0));
+                y += 10.0;
+                prims.push(Prim::Bar {
+                    x: (metrics.thickness - width) / 2.0,
+                    y,
+                    width,
+                    row: 0,
+                    color: bar_color,
+                    pace: marker,
+                });
+                y += BAR_THICKNESS / 2.0;
             }
             return Ok(Content {
                 length: y + PAD_VERTICAL,
@@ -718,9 +704,30 @@ impl Renderer {
             });
         }
         let x = Self::leading_icon(view, metrics, &mut prims);
-        let width = Self::stack(lines, x, metrics, false, &mut prims);
+        let number_width = number.width;
+        let number_height = number.height;
+        Self::place_runs(
+            vec![(number, Tone::Tint(pace.color))],
+            x,
+            (metrics.thickness - number_height) / 2.0,
+            number_height,
+            &mut prims,
+        );
+        let mut length = x + number_width;
+        if show_bar {
+            length += 12.0;
+            prims.push(Prim::Bar {
+                x: length,
+                y: metrics.thickness / 2.0,
+                width: pace.bar_width,
+                row: 0,
+                color: bar_color,
+                pace: marker,
+            });
+            length += pace.bar_width;
+        }
         Ok(Content {
-            length: x + width + PAD_END,
+            length: length + PAD_END,
             prims,
         })
     }
@@ -2264,6 +2271,8 @@ mod weekly_pace_render_tests {
         let mut view =
             super::super::model::resolve(&widget, &ProviderLimits::default(), appearance);
         let mut renderer = Renderer::new().unwrap();
+        view.rows[0].progress = Some(0.5);
+        view.rows[0].pace = Some(0.43);
         for value in ["+100", "-100", "+10", "-10", "0", "—"] {
             view.weekly_pace.as_mut().unwrap().value = value.into();
             view.weekly_pace.as_mut().unwrap().remaining = "100% left *".into();
@@ -2276,7 +2285,32 @@ mod weekly_pace_render_tests {
                         vertical: false,
                     };
                     let content = renderer.content(&compact, metrics).unwrap();
+                    assert_eq!(
+                        content
+                            .prims
+                            .iter()
+                            .filter(|prim| matches!(prim, Prim::Text { .. }))
+                            .count(),
+                        1,
+                        "the widget shows only the signed number, with no captions"
+                    );
+                    assert_eq!(
+                        content
+                            .prims
+                            .iter()
+                            .filter(|prim| matches!(prim, Prim::Bar { .. }))
+                            .count(),
+                        usize::from(level < 3),
+                        "the bar shrinks before it is hidden"
+                    );
                     for primitive in &content.prims {
+                        if let Prim::Bar { pace, .. } = primitive {
+                            assert_eq!(
+                                *pace,
+                                Some(0.43),
+                                "marker represents expected remaining quota"
+                            );
+                        }
                         if let Prim::Text { layout, x, y, .. } = primitive {
                             let mut measured = DWRITE_TEXT_METRICS::default();
                             unsafe {

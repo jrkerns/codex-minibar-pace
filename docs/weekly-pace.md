@@ -10,7 +10,7 @@ A fresh configuration enables the weekly pace widget, Monday–Friday 09:00–17
 
 Positive means quota in reserve. If 40% of scheduled work time has elapsed and 30% of quota is used, pace is **+10 percentage points**. This is a difference in allowance, not a relative burn-rate forecast. Negative means quota spent ahead of the plan. Values within two points use a neutral color.
 
-The second line shows weekly quota remaining and the reset countdown. Hover for actual and expected usage, the precise pace difference, schedule, reset date, and last sample time. During a refresh failure or after samples age beyond twice the configured refresh interval plus two minutes, pace is unavailable; retained quota is marked with an asterisk. Cached data without a known interval uses a 35-minute maximum age.
+The taskbar row shows the icon, signed pace number, and a remaining-quota progress bar. The marker on the bar shows expected remaining quota for the current work schedule. Labels and reset countdowns are kept in hover details. Hover for actual and expected usage, the precise pace difference, schedule, reset date, and last sample time. During a refresh failure or after samples age beyond twice the configured refresh interval plus two minutes, pace is unavailable; the retained quota bar is gray. Cached data without a known interval uses a 35-minute maximum age.
 
 Work intervals are clipped to the reported quota window. Nights and excluded days do not advance expected usage, but actual spending still counts. Schedule changes recalculate the entire current cycle. No quota is refilled locally when a reset passes: a successful read must supply the next window.
 
@@ -30,7 +30,7 @@ These checks require the user's desktop; automated verification never launches t
 2. Change working hours and exclude/include weekends. Confirm the widget, preview, and Codex weekly popup marker update without a restart; confirm the five-hour display is unchanged.
 3. Select another configured Codex account and confirm the widget and popup refer to the same account.
 4. Check Windows light/dark taskbars and 100%, 125%, 150%, and 200% scaling. Confirm both lines fit at the taskbar's normal and compact heights.
-5. Crowd the taskbar. Countdown and secondary text may disappear; the signed pace must remain visible. Existing taskbar placement limitations still apply when no room remains.
+5. Crowd the taskbar. The progress bar shrinks, then disappears if needed; the signed pace must remain visible. Existing taskbar placement limitations still apply when no room remains.
 6. Disconnect the network, refresh, and confirm PACE becomes unavailable while retained quota is marked stale. Reconnect and refresh to restore it.
 7. Sleep/wake and restart Explorer. Confirm the widget returns in its expected position and recalculates. Check existing supported monitor placements.
 8. Run upstream Minibar alongside the fork to confirm separate settings and tray access.

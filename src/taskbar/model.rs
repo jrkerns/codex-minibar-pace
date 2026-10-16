@@ -124,6 +124,7 @@ pub(crate) struct WeeklyPaceView {
     pub(crate) countdown: Option<String>,
     pub(crate) color: Rgb,
     pub(crate) secondary: bool,
+    pub(crate) bar_width: f32,
 }
 
 /// One provider in the hover card: every quota it reports, not only the
@@ -156,10 +157,16 @@ impl WidgetView {
             if level >= 1 {
                 pace.countdown = None;
             }
-            if level >= 2 {
+            pace.bar_width = match level {
+                0 => 112.0,
+                1 => 72.0,
+                2 => 36.0,
+                _ => 0.0,
+            };
+            if level >= 3 {
                 pace.secondary = false;
             }
-            if level >= 3 {
+            if level >= 4 {
                 view.icon = None;
             }
             return view;
@@ -633,6 +640,7 @@ fn weekly_pace_view(
                 .map(|reset| countdown(reset, now)),
             color,
             secondary: true,
+            bar_width: 112.0,
         },
         details,
     )
@@ -933,9 +941,10 @@ mod tests {
             if level >= 1 {
                 assert!(compact.weekly_pace.as_ref().unwrap().countdown.is_none());
             }
-            if level >= 2 {
+            if level >= 3 {
                 assert!(!compact.weekly_pace.as_ref().unwrap().secondary);
             }
+            assert!(compact.weekly_pace.as_ref().unwrap().bar_width <= 112.0);
         }
     }
     #[test]
