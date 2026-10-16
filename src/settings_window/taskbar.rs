@@ -144,7 +144,7 @@ fn widget_summary(widget: &TaskbarWidget) -> String {
     if providers.is_empty() {
         crate::i18n::format("style-no-indicators", &[("style", style.to_string())])
     } else {
-        format!("{style} Ã‚Â· {}", providers.join(", "))
+        format!("{style} · {}", providers.join(", "))
     }
 }
 

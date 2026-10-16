@@ -512,7 +512,7 @@ fn weekly_pace_view(
     let mut details = vec![if schedule.enabled {
         schedule.summary()
     } else {
-        "Calendar pacing Â· all hours".into()
+        "Calendar pacing · all hours".into()
     }];
     match reserve {
         Ok(value) => {
@@ -525,7 +525,7 @@ fn weekly_pace_view(
                 }
             ));
             details.push(format!(
-                "Used: {}% Â· Expected: {:.1}%",
+                "Used: {}% · Expected: {:.1}%",
                 window.used_percent.unwrap_or(0),
                 expected.unwrap_or(0.0)
             ));
@@ -545,7 +545,7 @@ fn weekly_pace_view(
                 .sampled_at
                 .with_timezone(&Local)
                 .format("%a %H:%M:%S"),
-            if fresh { "" } else { " Â· stale" }
+            if fresh { "" } else { " · stale" }
         ));
     } else {
         details.push("Awaiting quota data".into());
@@ -569,9 +569,9 @@ fn weekly_pace_view(
     };
     (
         WeeklyPaceView {
-            value: reserve.map_or_else(|_| "â€”".into(), crate::pace::signed),
+            value: reserve.map_or_else(|_| "—".into(), crate::pace::signed),
             remaining: window.remaining_percent().map_or_else(
-                || "â€”".into(),
+                || "—".into(),
                 |value| format!("{value}% left{}", if fresh { "" } else { " *" }),
             ),
             countdown: window
@@ -585,7 +585,7 @@ fn weekly_pace_view(
     )
 }
 
-/// `1.2M tokens Â· â‰ˆ $3.40`, or `$1.23 Â· 45 requests` for providers billed
+/// `1.2M tokens · ≈ $3.40`, or `$1.23 · 45 requests` for providers billed
 /// per request.
 fn today_usage(provider: ProviderId, usage: &crate::usage::UsageStatistics) -> Option<String> {
     if !usage.has_data() {
@@ -890,6 +890,7 @@ mod tests {
         let codex = ProviderId::primary(ProviderKind::Codex);
         let mut data = limits(0, 100);
         data.get_mut(codex).sampled_at = Utc::now();
+        let weekly_window = data.get(codex).secondary.clone();
         data.get_mut(codex)
             .additional_limits
             .push(crate::limits::AdditionalLimit {
@@ -897,7 +898,7 @@ mod tests {
                 title: "Reserve".into(),
                 window: LimitWindow {
                     used_percent: Some(0),
-                    ..data.get(codex).secondary.clone()
+                    ..weekly_window
                 },
             });
         let widget = TaskbarWidget::weekly_pace(codex);

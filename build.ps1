@@ -19,7 +19,7 @@ $Root = $PSScriptRoot
 $ProductName = "Codex Minibar Pace"
 $Publisher = "Codex Minibar Pace"
 $AppExeName = "codex-minibar-pace.exe"
-# Mirrored by Tauri â€” SourceForge HTML landings are not a real zip.
+# Mirrored by Tauri — SourceForge HTML landings are not a real zip.
 $NsisVersion = "3.11"
 $NsisUrl = "https://github.com/tauri-apps/binary-releases/releases/download/nsis-$NsisVersion/nsis-$NsisVersion.zip"
 
