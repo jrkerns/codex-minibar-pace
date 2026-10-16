@@ -1,0 +1,52 @@
+name: Pace validation and portable build
+on:
+  push:
+    branches: [codex/weekly-workday-pace]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pace-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_RELEASE_LTO: "false"
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Formatting
+        run: cargo fmt --package codex-minibar --check
+      - name: Compile check
+        run: cargo check --config profile.dev.package.gpui.opt-level=0 --locked
+      - name: Tests and preview renders
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory previews -Force | Out-Null
+          $env:TASKBAR_PREVIEW_DIR = (Resolve-Path previews).Path
+          cargo test --config profile.dev.package.gpui.opt-level=0 --all-targets --all-features --locked
+      - name: Clippy
+        run: cargo clippy --config profile.dev.package.gpui.opt-level=0 --all-targets --all-features --locked -- -D warnings
+      - name: Portable Windows build
+        shell: pwsh
+        run: ./build.ps1 -Arch x64 -SkipInstaller
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pace-validation-and-portable
+          path: |
+            previews/*.png
+            dist/**/*.zip
+            dist/**/*.txt
+          if-no-files-found: ignore

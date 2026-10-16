@@ -1,4 +1,4 @@
-### Codex Minibar application messages.
+### Codex Minibar Pace application messages.
 ### English source; per-message fallback. Keep $parameters unchanged.
 
 # src/provider_registry.rs
@@ -978,7 +978,7 @@ msg-60-minutes = 60 minutes
 start-with-windows = Start with Windows
 
 # src/settings_window/general.rs
-open-codex-minibar-in-the-tray-when-you-sign-in = Open Codex Minibar in the tray when you sign in.
+open-codex-minibar-in-the-tray-when-you-sign-in = Open Codex Minibar Pace in the tray when you sign in.
 
 # src/settings_window/onboarding.rs
 refresh-interval = Refresh interval
@@ -1964,7 +1964,7 @@ app-icon = App icon
 widget = Widget { $v0 }
 
 # src/settings_window/tray.rs
-the-codex-minibar-icon = The Codex Minibar icon
+the-codex-minibar-icon = The Codex Minibar Pace icon
 
 # src/settings_window/tray.rs
 style-no-indicators = { $style } · No indicators
@@ -2000,7 +2000,7 @@ edit = Edit
 duplicate = Duplicate
 
 # src/settings_window/tray.rs
-shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Shows the Codex Minibar icon in the notification area. It has no indicators to set up.
+shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Shows the Codex Minibar Pace icon in the notification area. It has no indicators to set up.
 
 # src/settings_window/tray.rs
 style = Style
@@ -2096,10 +2096,10 @@ english = English
 msg-russian = Русский
 
 # application
-codex-minibar-settings = Codex Minibar Settings
+codex-minibar-settings = Codex Minibar Pace Settings
 
 # application
-welcome-to-codex-minibar = Welcome to Codex Minibar
+welcome-to-codex-minibar = Welcome to Codex Minibar Pace
 
 # application
 exit = Exit
@@ -2611,7 +2611,7 @@ update-installing = Installing update
 update-unpacking = Unpacking files…
 
 # src/updater.rs
-update-restarting = Restarting Codex Minibar
+update-restarting = Restarting Codex Minibar Pace
 
 # src/updater.rs
 update-restarting-body = The app will reopen in a moment.
@@ -2711,7 +2711,7 @@ taskbar-style-glance = Glance
 taskbar-style-glance-hint = The provider icon beside two lines of text, like the weather button.
 taskbar-style-rings-hint = A progress ring per quota with its value beside it.
 taskbar-style-bars-hint = Thin progress bars stacked beside the provider icon.
-taskbar-menu-open = Open Codex Minibar
+taskbar-menu-open = Open Codex Minibar Pace
 taskbar-menu-settings = Taskbar widget settings
 taskbar-menu-hide = Hide taskbar widgets
 taskbar-card-left = { $value } left
@@ -2872,3 +2872,6 @@ cmdpal-content-hint = The Dock writes a band as a title over a subtitle.
 
 # src/settings_window/command_palette.rs
 cmdpal-indicators-hint = Up to 2 quotas: one fills the title and subtitle, two take a line each.
+
+weekly-pace-style = Weekly pace
+weekly-pace-style-hint = Signed weekly headroom over scheduled working hours.

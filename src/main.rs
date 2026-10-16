@@ -149,7 +149,7 @@ fn show_error(message: &str) {
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
-        let caption: Vec<u16> = OsStr::new("Codex Minibar")
+        let caption: Vec<u16> = OsStr::new("Codex Minibar Pace")
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
@@ -172,7 +172,7 @@ fn main() {
     if troubleshoot::is_cli_request() {
         if let Err(error) = troubleshoot::launch_cli_picker() {
             show_error(&format!(
-                "Could not start Codex Minibar troubleshooting: {error:#}"
+                "Could not start Codex Minibar Pace troubleshooting: {error:#}"
             ));
         }
         return;
@@ -183,7 +183,7 @@ fn main() {
         Ok(None) => return,
         Err(error) => {
             show_error(&format!(
-                "Codex Minibar could not enforce a single instance: {error:#}"
+                "Codex Minibar Pace could not enforce a single instance: {error:#}"
             ));
             return;
         }
@@ -196,7 +196,7 @@ fn main() {
         eprintln!("could not clean abandoned Codex sign-in directories: {error:#}");
     }
     if let Err(error) = run() {
-        show_error(&format!("Codex Minibar failed: {error:#}"));
+        show_error(&format!("Codex Minibar Pace failed: {error:#}"));
     }
     single_instance::release_for_update();
 }

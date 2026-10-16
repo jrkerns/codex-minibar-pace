@@ -369,7 +369,7 @@ impl PopupRoot {
             fx::NORMAL,
         );
         let pace = (style.show_usage_pace && !exhausted)
-            .then(|| limit.pace_tip(style.show_used_percentage, Utc::now()))
+            .then(|| crate::pace::card_tip(key, limit, style.show_used_percentage, Utc::now()))
             .flatten();
         let mut row = div()
             .relative()
@@ -444,7 +444,7 @@ impl PopupRoot {
             fx::NORMAL,
         );
         let pace = (style.show_usage_pace && !exhausted)
-            .then(|| limit.pace_tip(style.show_used_percentage, Utc::now()))
+            .then(|| crate::pace::card_tip(key, limit, style.show_used_percentage, Utc::now()))
             .flatten();
         let percent = if disabled {
             None
@@ -544,7 +544,7 @@ impl PopupRoot {
             fx::NORMAL,
         );
         let pace = (style.show_usage_pace && !exhausted)
-            .then(|| limit.pace_tip(style.show_used_percentage, Utc::now()))
+            .then(|| crate::pace::card_tip(key, limit, style.show_used_percentage, Utc::now()))
             .flatten();
         let percent = if disabled {
             None
@@ -808,7 +808,7 @@ impl PopupRoot {
             fx::NORMAL,
         );
         let pace = (style.show_usage_pace && !exhausted)
-            .then(|| limit.pace_tip(style.show_used_percentage, Utc::now()))
+            .then(|| crate::pace::card_tip(key, limit, style.show_used_percentage, Utc::now()))
             .flatten();
         let secondary = palette.text_secondary;
         let metrics = self.metrics(window);

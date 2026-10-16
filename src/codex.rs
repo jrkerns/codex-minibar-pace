@@ -388,7 +388,7 @@ impl CodexClient {
             &mut stdin,
             1,
             "initialize",
-            json!({"clientInfo": {"name": "Codex Minibar", "version": env!("CARGO_PKG_VERSION")}, "capabilities": {"experimentalApi": true}}),
+            json!({"clientInfo": {"name": "Codex Minibar Pace", "version": env!("CARGO_PKG_VERSION")}, "capabilities": {"experimentalApi": true}}),
         )?;
         wait_for_response(&receiver, 1, self.timeout)?;
         // Complete the JSON-RPC initialize handshake required by current

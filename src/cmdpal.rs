@@ -508,7 +508,7 @@ fn download_package() -> anyhow::Result<PathBuf> {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    let directory = std::env::temp_dir().join("Codex Minibar");
+    let directory = std::env::temp_dir().join("Codex Minibar Pace");
     fs::create_dir_all(&directory)?;
     let path = directory.join(format!("{PACKAGE_NAME}-{stamp}.msix"));
     crate::updater::download_file(&package_url(), &path)?;
@@ -644,6 +644,7 @@ mod tests {
 
     fn view(rows: Vec<Row>, labels: bool, values: bool) -> WidgetView {
         WidgetView {
+            weekly_pace: None,
             id: "dock".into(),
             style: TaskbarWidgetStyle::Glance,
             icon: None,

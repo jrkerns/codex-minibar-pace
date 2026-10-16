@@ -1,4 +1,4 @@
-//! Local data bridge for the Codex Minibar Stream Deck companion.
+//! Local data bridge for the Codex Minibar Pace Stream Deck companion.
 //!
 //! The Stream Deck plugin deliberately does not know how to authenticate with
 //! any provider. It reads a short-lived local endpoint description and asks
@@ -68,7 +68,7 @@ fn download_latest_plugin() -> anyhow::Result<PathBuf> {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    let directory = std::env::temp_dir().join("Codex Minibar");
+    let directory = std::env::temp_dir().join("Codex Minibar Pace");
     fs::create_dir_all(&directory)?;
     let path = directory.join(format!(
         "codex-minibar-streamdeck-{}-{stamp}-{PLUGIN_FILE_NAME}",

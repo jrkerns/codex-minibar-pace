@@ -1,4 +1,4 @@
-### Codex Minibar application messages.
+### Codex Minibar Pace application messages.
 ### English source; per-message fallback. Keep $parameters unchanged.
 
 # src/provider_registry.rs
@@ -979,7 +979,7 @@ msg-60-minutes = 60 минут
 start-with-windows = Запускать вместе с Windows
 
 # src/settings_window/general.rs
-open-codex-minibar-in-the-tray-when-you-sign-in = Открывать Codex Minibar в трее при входе в систему.
+open-codex-minibar-in-the-tray-when-you-sign-in = Открывать Codex Minibar Pace в трее при входе в систему.
 
 # src/settings_window/onboarding.rs
 refresh-interval = Интервал обновления
@@ -1965,7 +1965,7 @@ app-icon = Значок приложения
 widget = Виджет { $v0 }
 
 # src/settings_window/tray.rs
-the-codex-minibar-icon = Значок Codex Minibar
+the-codex-minibar-icon = Значок Codex Minibar Pace
 
 # src/settings_window/tray.rs
 style-no-indicators = { $style } · Нет индикаторов
@@ -2001,7 +2001,7 @@ edit = Изменить
 duplicate = Дублировать
 
 # src/settings_window/tray.rs
-shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Показывает значок Codex Minibar в области уведомлений. Настраиваемых индикаторов нет.
+shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Показывает значок Codex Minibar Pace в области уведомлений. Настраиваемых индикаторов нет.
 
 # src/settings_window/tray.rs
 style = Стиль
@@ -2097,10 +2097,10 @@ english = English
 msg-russian = Русский
 
 # application
-codex-minibar-settings = Настройки Codex Minibar
+codex-minibar-settings = Настройки Codex Minibar Pace
 
 # application
-welcome-to-codex-minibar = Добро пожаловать в Codex Minibar
+welcome-to-codex-minibar = Добро пожаловать в Codex Minibar Pace
 
 # application
 exit = Выйти
@@ -2618,7 +2618,7 @@ update-installing = Установка обновления
 update-unpacking = Распаковка файлов…
 
 # src/updater.rs
-update-restarting = Перезапуск Codex Minibar
+update-restarting = Перезапуск Codex Minibar Pace
 
 # src/updater.rs
 update-restarting-body = Приложение сейчас откроется снова.
@@ -2718,7 +2718,7 @@ taskbar-style-glance = Сводка
 taskbar-style-glance-hint = Значок провайдера и две строки текста, как кнопка погоды.
 taskbar-style-rings-hint = Кольцо прогресса для каждого лимита со значением рядом.
 taskbar-style-bars-hint = Тонкие полосы прогресса рядом со значком провайдера.
-taskbar-menu-open = Открыть Codex Minibar
+taskbar-menu-open = Открыть Codex Minibar Pace
 taskbar-menu-settings = Настройки виджетов панели задач
 taskbar-menu-hide = Скрыть виджеты с панели задач
 taskbar-card-left = Осталось { $value }
@@ -2879,3 +2879,6 @@ cmdpal-content-hint = Док показывает бэнд как заголов
 
 # src/settings_window/command_palette.rs
 cmdpal-indicators-hint = До 2 квот: одна занимает заголовок и подзаголовок, две — по строке.
+
+weekly-pace-style = Weekly pace
+weekly-pace-style-hint = Signed weekly headroom over scheduled working hours.

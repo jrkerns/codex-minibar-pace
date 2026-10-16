@@ -16,8 +16,8 @@ mod platform {
         },
     };
 
-    const MUTEX_NAME: &str = "Local\\CodexMinibar.9F89F5E9-770D-41AA-879F-9B15C12A2E6A";
-    const POPUP_TITLE: &str = "Codex Minibar";
+    const MUTEX_NAME: &str = "Local\\CodexMinibarPace.9F89F5E9-770D-41AA-879F-9B15C12A2E6A";
+    const POPUP_TITLE: &str = "Codex Minibar Pace";
     const EDGE_MARGIN: i32 = 20;
 
     static HOLDER: OnceLock<Mutex<Option<isize>>> = OnceLock::new();

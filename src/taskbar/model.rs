@@ -114,6 +114,16 @@ pub(crate) struct WidgetView {
     pub(crate) show_pace: bool,
     /// The hover card: each provider the widget reads, in full.
     pub(crate) card: Vec<CardSection>,
+    pub(crate) weekly_pace: Option<WeeklyPaceView>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WeeklyPaceView {
+    pub(crate) value: String,
+    pub(crate) remaining: String,
+    pub(crate) countdown: Option<String>,
+    pub(crate) color: Rgb,
+    pub(crate) secondary: bool,
 }
 
 /// One provider in the hover card: every quota it reports, not only the
@@ -127,6 +137,7 @@ pub(crate) struct CardSection {
     /// Today's tokens and their API value, or spend for pay-as-you-go
     /// providers; `None` without usage statistics.
     pub(crate) today: Option<String>,
+    pub(crate) details: Vec<String>,
 }
 
 impl WidgetView {
@@ -141,6 +152,18 @@ impl WidgetView {
     /// graphic.
     pub(crate) fn compacted(&self, level: u8) -> Self {
         let mut view = self.clone();
+        if let Some(pace) = &mut view.weekly_pace {
+            if level >= 1 {
+                pace.countdown = None;
+            }
+            if level >= 2 {
+                pace.secondary = false;
+            }
+            if level >= 3 {
+                view.icon = None;
+            }
+            return view;
+        }
         let graphic = view.style.has_graphic();
         if level >= 1 {
             for row in &mut view.rows {
@@ -271,9 +294,21 @@ fn resolve_row(
         _ => full_label.clone(),
     };
     let window = metric.map(|metric| metric.window).unwrap_or_default();
-    let pace = window
-        .pace_tip(indicator.limit_value == LimitValue::Used, now)
-        .map(|tip| (tip.percent / 100.0) as f32);
+    let snapshot = limits.get(provider);
+    let pace = crate::pace::tip(
+        provider,
+        indicator.metric_id == "codex.weekly",
+        &window,
+        indicator.limit_value == LimitValue::Used,
+        now,
+    )
+    .filter(|_| {
+        provider.kind() != crate::settings::ProviderKind::Codex
+            || indicator.metric_id != "codex.weekly"
+            || !crate::pace::current().enabled
+            || crate::pace::is_fresh(provider, snapshot.sampled_at, now)
+    })
+    .map(|tip| (tip.percent / 100.0) as f32);
     let remaining = window.remaining_percent();
     let displayed = match indicator.limit_value {
         LimitValue::Remaining => remaining,
@@ -308,6 +343,9 @@ pub(crate) fn resolve(
     } else {
         TaskbarResetDisplay::Off
     };
+    let mut normalized = widget.clone();
+    normalized.normalize();
+    let widget = &normalized;
     let mut rows = widget
         .indicators
         .iter()
@@ -342,6 +380,19 @@ pub(crate) fn resolve(
             || (!style.has_graphic() && reset == TaskbarResetDisplay::Off),
         show_pace: widget.show_pace,
         card: card_sections(widget, limits, appearance, now),
+        weekly_pace: (style == TaskbarWidgetStyle::WeeklyPace).then(|| {
+            let provider = widget
+                .provider()
+                .unwrap_or_else(|| ProviderId::primary(crate::settings::ProviderKind::Codex));
+            weekly_pace_view(
+                provider,
+                limits.get(provider),
+                &crate::pace::current(),
+                appearance,
+                now,
+            )
+            .0
+        }),
     }
 }
 
@@ -411,12 +462,130 @@ fn card_sections(
                     .map(crate::popup_window::capitalize_plan_name),
                 rows,
                 today: today_usage(provider, &provider_limits.usage),
+                details: if provider.kind() == crate::settings::ProviderKind::Codex
+                    && (crate::pace::current().enabled
+                        || widget.style == TaskbarWidgetStyle::WeeklyPace)
+                {
+                    weekly_pace_view(
+                        provider,
+                        provider_limits,
+                        &crate::pace::current(),
+                        appearance,
+                        now,
+                    )
+                    .1
+                } else {
+                    Vec::new()
+                },
             }
         })
         .collect()
 }
 
-/// `1.2M tokens · ≈ $3.40`, or `$1.23 · 45 requests` for providers billed
+/// Shared widget/hover data. Never resolves the weekly source through a reserve fallback.
+fn weekly_pace_view(
+    provider: ProviderId,
+    snapshot: &crate::limits::RateLimits,
+    schedule: &crate::pace::WorkSchedule,
+    appearance: Appearance,
+    now: DateTime<Utc>,
+) -> (WeeklyPaceView, Vec<String>) {
+    let window = &snapshot.secondary;
+    let fresh = crate::pace::is_fresh(provider, snapshot.sampled_at, now);
+    let expected = if schedule.enabled {
+        crate::pace::expected(schedule, window, now, &Local)
+    } else {
+        window
+            .expected_used_percent(now)
+            .ok_or("Quota timing unavailable or reset passed")
+    };
+    let reserve = if !fresh {
+        Err("Stale data; awaiting a successful refresh")
+    } else {
+        expected.and_then(|expected| {
+            window
+                .used_percent
+                .map(|used| expected - f64::from(used.min(100)))
+                .ok_or("Usage unavailable")
+        })
+    };
+    let mut details = vec![if schedule.enabled {
+        schedule.summary()
+    } else {
+        "Calendar pacing Â· all hours".into()
+    }];
+    match reserve {
+        Ok(value) => {
+            details.push(format!(
+                "Pace: {value:+.1} percentage points {}",
+                if value < 0.0 {
+                    "(deficit)"
+                } else {
+                    "(in reserve)"
+                }
+            ));
+            details.push(format!(
+                "Used: {}% Â· Expected: {:.1}%",
+                window.used_percent.unwrap_or(0),
+                expected.unwrap_or(0.0)
+            ));
+        }
+        Err(reason) => details.push(reason.into()),
+    }
+    if let Some(reset) = window.resets_at {
+        details.push(format!(
+            "Reset: {}",
+            reset.with_timezone(&Local).format("%a %b %d %H:%M")
+        ));
+    }
+    if snapshot.sampled_at.timestamp() > 0 {
+        details.push(format!(
+            "Updated: {}{}",
+            snapshot
+                .sampled_at
+                .with_timezone(&Local)
+                .format("%a %H:%M:%S"),
+            if fresh { "" } else { " Â· stale" }
+        ));
+    } else {
+        details.push("Awaiting quota data".into());
+    }
+    let color = match reserve {
+        Ok(value) if value > 2.0 => {
+            if appearance.light {
+                [15, 123, 15]
+            } else {
+                [108, 203, 95]
+            }
+        }
+        Ok(value) if value < -2.0 => {
+            if appearance.light {
+                [157, 93, 0]
+            } else {
+                [252, 225, 0]
+            }
+        }
+        _ => appearance.text(),
+    };
+    (
+        WeeklyPaceView {
+            value: reserve.map_or_else(|_| "â€”".into(), crate::pace::signed),
+            remaining: window.remaining_percent().map_or_else(
+                || "â€”".into(),
+                |value| format!("{value}% left{}", if fresh { "" } else { " *" }),
+            ),
+            countdown: window
+                .resets_at
+                .filter(|reset| *reset > now)
+                .map(|reset| countdown(reset, now)),
+            color,
+            secondary: true,
+        },
+        details,
+    )
+}
+
+/// `1.2M tokens Â· â‰ˆ $3.40`, or `$1.23 Â· 45 requests` for providers billed
 /// per request.
 fn today_usage(provider: ProviderId, usage: &crate::usage::UsageStatistics) -> Option<String> {
     if !usage.has_data() {
@@ -696,6 +865,58 @@ mod tests {
         assert_eq!(
             countdown(now + chrono::Duration::minutes(3 * 1440 + 240), now),
             "3d 4h"
+        );
+    }
+    #[test]
+    fn compaction_always_preserves_the_signed_pace() {
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        let widget = TaskbarWidget::weekly_pace(codex);
+        let mut view = resolve(&widget, &limits(30, 40), appearance(false));
+        view.weekly_pace.as_mut().unwrap().value = "+10".into();
+        for level in 0..=COMPACT_LEVELS {
+            let compact = view.compacted(level);
+            assert_eq!(compact.style, TaskbarWidgetStyle::WeeklyPace);
+            assert_eq!(compact.weekly_pace.as_ref().unwrap().value, "+10");
+            if level >= 1 {
+                assert!(compact.weekly_pace.as_ref().unwrap().countdown.is_none());
+            }
+            if level >= 2 {
+                assert!(!compact.weekly_pace.as_ref().unwrap().secondary);
+            }
+        }
+    }
+    #[test]
+    fn weekly_widget_uses_raw_weekly_even_when_exhausted_with_reserve() {
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        let mut data = limits(0, 100);
+        data.get_mut(codex).sampled_at = Utc::now();
+        data.get_mut(codex)
+            .additional_limits
+            .push(crate::limits::AdditionalLimit {
+                id: crate::limits::GPT_RESERVE_LIMIT_ID.into(),
+                title: "Reserve".into(),
+                window: LimitWindow {
+                    used_percent: Some(0),
+                    ..data.get(codex).secondary.clone()
+                },
+            });
+        let widget = TaskbarWidget::weekly_pace(codex);
+        let view = resolve(&widget, &data, appearance(false));
+        assert_eq!(view.weekly_pace.as_ref().unwrap().remaining, "0% left");
+    }
+    #[test]
+    fn stale_weekly_widget_hides_pace_and_labels_its_remaining_sample() {
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        let mut data = limits(0, 30);
+        data.get_mut(codex).sampled_at = Utc::now() - chrono::Duration::days(1);
+        let view = resolve(&TaskbarWidget::weekly_pace(codex), &data, appearance(false));
+        assert_eq!(view.weekly_pace.as_ref().unwrap().value, "—");
+        assert!(view.weekly_pace.as_ref().unwrap().remaining.contains('*'));
+        assert!(
+            view.card[0]
+                .details
+                .iter()
+                .any(|line| line.contains("Stale"))
         );
     }
 }

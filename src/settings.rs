@@ -1732,6 +1732,8 @@ impl TrayWidget {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskbarWidgetStyle {
+    /// A large signed weekly pace above remaining quota and reset.
+    WeeklyPace,
     /// Provider mark beside two lines of text, like the Windows weather
     /// button. Also reads the retired text-only `compact` design, which is
     /// a Glance without the mark.
@@ -1752,7 +1754,8 @@ pub enum TaskbarWidgetStyle {
 
 impl TaskbarWidgetStyle {
     /// Picker order: text designs first, then by graphic.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
+        Self::WeeklyPace,
         Self::Glance,
         Self::Rings,
         Self::Nested,
@@ -1764,6 +1767,7 @@ impl TaskbarWidgetStyle {
     /// How many indicators fit the taskbar height in this design.
     pub const fn max_indicators(self) -> usize {
         match self {
+            Self::WeeklyPace => 1,
             Self::Glance => 2,
             Self::Rings | Self::Bars | Self::Nested | Self::Dials | Self::Meters => 3,
         }
@@ -1778,7 +1782,7 @@ impl TaskbarWidgetStyle {
 
     /// Draws progress graphics, which can carry a pace marker.
     pub const fn has_graphic(self) -> bool {
-        !matches!(self, Self::Glance)
+        !matches!(self, Self::Glance | Self::WeeklyPace)
     }
 
     /// Writes indicator names next to values.
@@ -1910,6 +1914,14 @@ impl TaskbarWidget {
         }
     }
 
+    pub fn weekly_pace(provider: ProviderId) -> Self {
+        Self {
+            style: TaskbarWidgetStyle::WeeklyPace,
+            indicators: vec![TrayIndicator::new(provider, "codex.weekly")],
+            ..Self::for_provider(provider)
+        }
+    }
+
     pub fn duplicate_with_new_id(&self) -> Self {
         let mut copy = self.clone();
         copy.id = new_taskbar_widget_id();
@@ -1934,6 +1946,17 @@ impl TaskbarWidget {
         if self.id.is_empty() {
             self.id = new_taskbar_widget_id();
             changed = true;
+        }
+        if self.style == TaskbarWidgetStyle::WeeklyPace {
+            let provider = self
+                .provider()
+                .filter(|provider| provider.kind() == ProviderKind::Codex)
+                .unwrap_or_else(|| ProviderId::primary(ProviderKind::Codex));
+            let indicators = vec![TrayIndicator::new(provider, "codex.weekly")];
+            if self.indicators != indicators {
+                self.indicators = indicators;
+                changed = true;
+            }
         }
         let max = self.style.max_indicators();
         if self.indicators.len() > max {
@@ -2162,6 +2185,8 @@ pub struct Settings {
     #[serde(default = "default_show_usage_values")]
     pub show_usage_values: bool,
     pub show_usage_pace: bool,
+    #[serde(default)]
+    pub weekly_work_schedule: crate::pace::WorkSchedule,
     /// Per-card visibility for popup Home and provider tabs.
     pub popup_visibility: PopupVisibility,
     /// Shows the Usage Stats widget on the popup's Home tab.
@@ -2241,6 +2266,10 @@ impl Default for Settings {
             show_used_percentage: false,
             show_usage_values: true,
             show_usage_pace: true,
+            weekly_work_schedule: crate::pace::WorkSchedule {
+                enabled: true,
+                ..Default::default()
+            },
             popup_visibility: PopupVisibility::build_defaults(),
             show_total_spend_on_all_tab: true,
             total_spend_presentation: TotalSpendPresentation::default(),
@@ -2261,6 +2290,9 @@ impl Default for Settings {
             game_mode_ignored: Vec::new(),
         };
         settings.enable_taskbar_by_default();
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        settings.taskbar.widgets = vec![TaskbarWidget::weekly_pace(codex)];
+        settings.taskbar.click = TaskbarClick::Tab;
         settings
     }
 }
@@ -2288,7 +2320,7 @@ impl Settings {
     }
 
     pub fn default_path() -> Result<PathBuf> {
-        let dirs = ProjectDirs::from("dev", "Codex Minibar", "Codex Minibar")
+        let dirs = ProjectDirs::from("dev", "Codex Minibar Pace", "Codex Minibar Pace")
             .context("could not resolve the application config directory")?;
         Ok(dirs.config_dir().join("settings.toml"))
     }
@@ -2382,6 +2414,13 @@ impl Settings {
         // be current — a stamped version must never leave us unable to decode.
         let healed_tray = heal_legacy_tray_widgets(&mut document);
         let mut dirty = healed_tray;
+        // Serde container defaults otherwise inherit fresh-install pacing.
+        if document.get("weekly_work_schedule").is_none() {
+            document.as_table_mut().expect("settings table").insert(
+                "weekly_work_schedule".into(),
+                toml::Value::try_from(crate::pace::WorkSchedule::default())?,
+            );
+        }
         if original_version < SETTINGS_VERSION {
             migrate(&mut document, original_version)?;
             dirty = true;
@@ -2908,6 +2947,8 @@ impl Settings {
 
     /// Applies settings whose effect lives outside the render tree.
     pub fn apply_runtime_effects(&self) -> Result<()> {
+        crate::pace::publish(&self.weekly_work_schedule);
+        crate::pace::publish_intervals(&self.instances);
         if !crate::settings_window::has_pending_edits() {
             self.language.apply();
         }
@@ -2965,7 +3006,7 @@ fn startup_registration_present() -> Result<bool> {
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
-    let value_name: Vec<u16> = "Codex Minibar"
+    let value_name: Vec<u16> = "Codex Minibar Pace"
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
@@ -3010,7 +3051,7 @@ fn apply_startup_registration(enabled: bool) -> Result<()> {
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
-    let value_name: Vec<u16> = "Codex Minibar"
+    let value_name: Vec<u16> = "Codex Minibar Pace"
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
@@ -4696,5 +4737,33 @@ enabled = ["codex"]
         assert_eq!(loaded.version, SETTINGS_VERSION);
         assert!(loaded.onboarding_completed);
         assert!(path.with_extension("toml.corrupt").exists());
+    }
+}
+
+#[cfg(test)]
+mod weekly_pace_tests {
+    use super::*;
+    #[test]
+    fn fresh_install_enables_schedule_and_weekly_widget() {
+        let s = Settings::default();
+        assert!(s.weekly_work_schedule.enabled);
+        assert_eq!(s.taskbar.widgets[0].style, TaskbarWidgetStyle::WeeklyPace);
+        assert_eq!(s.taskbar.widgets[0].indicators[0].metric_id, "codex.weekly");
+    }
+    #[test]
+    fn existing_settings_without_schedule_keep_calendar_pacing() {
+        let mut value = toml::Value::try_from(Settings::default()).unwrap();
+        value.as_table_mut().unwrap().remove("weekly_work_schedule");
+        let (s, _) = Settings::decode_raw(&toml::to_string(&value).unwrap()).unwrap();
+        assert!(!s.weekly_work_schedule.enabled);
+    }
+    #[test]
+    fn schedule_and_widget_round_trip_without_changing_values() {
+        let mut s = Settings::default();
+        s.weekly_work_schedule.weekdays = vec![0, 2, 4];
+        s.weekly_work_schedule.start_minutes = 510;
+        let (decoded, _) = Settings::decode_raw(&toml::to_string(&s).unwrap()).unwrap();
+        assert_eq!(s.weekly_work_schedule, decoded.weekly_work_schedule);
+        assert_eq!(s.taskbar, decoded.taskbar);
     }
 }

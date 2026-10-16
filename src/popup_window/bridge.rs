@@ -359,7 +359,9 @@ pub(super) fn start_background_bridge(state: Arc<AppState>) {
             if providers_changed || !restart.is_empty() {
                 let provider_errors = state.sync_provider_workers(&settings, &restart);
                 for (provider, error) in provider_errors {
+                    crate::pace::set_failed(provider, true);
                     ui.set_provider_error(provider, error);
+                    crate::taskbar::publish_limits(&state.current_limits());
                 }
             }
             ui.provider_errors
@@ -694,8 +696,10 @@ pub(super) fn start_background_bridge(state: Arc<AppState>) {
                     // Publish once, then let both native tray and GPUI render
                     // from that exact snapshot.
                     warn_login_expiry(provider, &limits);
+                    crate::pace::record_sample(provider, limits.sampled_at);
                     state.replace_limits(provider, limits);
                     ui.clear_provider_error(provider);
+                    crate::pace::set_failed(provider, false);
                     let limits = state.current_limits();
                     crate::settings_window::publish_discovered_popup_bricks(&limits);
                     crate::settings_window::publish_openrouter_snapshot(&limits);
@@ -918,7 +922,9 @@ pub(super) fn start_background_bridge(state: Arc<AppState>) {
                         "{} polling failed: {error}",
                         provider.display_name()
                     ));
+                    crate::pace::set_failed(provider, true);
                     ui.set_provider_error(provider, error);
+                    crate::taskbar::publish_limits(&state.current_limits());
                     publish_popup_ui(&ui);
                 }
                 // All live provider workers are forwarded as scoped events.

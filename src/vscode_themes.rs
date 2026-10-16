@@ -194,7 +194,7 @@ pub fn preview_generation() -> u64 {
 }
 
 fn themes_dir() -> Result<PathBuf> {
-    ProjectDirs::from("dev", "Codex Minibar", "Codex Minibar")
+    ProjectDirs::from("dev", "Codex Minibar Pace", "Codex Minibar Pace")
         .map(|dirs| dirs.config_dir().join("vscode-themes"))
         .context("could not resolve the application config directory")
 }

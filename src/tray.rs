@@ -70,7 +70,7 @@ fn truncate_tooltip(value: &str) -> String {
 
 fn widget_tooltip(widget: &TrayWidget, limits: &ProviderLimits) -> String {
     if widget.kind == TrayWidgetKind::AppIcon {
-        return "Codex Minibar".into();
+        return "Codex Minibar Pace".into();
     }
     let mut rows = Vec::<(String, String, Vec<String>)>::new();
     for indicator in &widget.indicators {
@@ -100,7 +100,7 @@ fn widget_tooltip(widget: &TrayWidget, limits: &ProviderLimits) -> String {
         }
     }
     if rows.is_empty() {
-        return "Codex Minibar".into();
+        return "Codex Minibar Pace".into();
     }
     truncate_tooltip(
         &rows
@@ -663,7 +663,7 @@ mod platform {
                 let pixels = icon_pixels(widget, limits);
                 let tooltip = widget
                     .map(|widget| widget_tooltip(widget, limits))
-                    .unwrap_or_else(|| "Codex Minibar".into());
+                    .unwrap_or_else(|| "Codex Minibar Pace".into());
                 let tray = TrayIconBuilder::new()
                     .with_icon(icon_from_pixels(&pixels)?)
                     .with_menu(Box::new(make_menu(update_available)?))
@@ -688,7 +688,7 @@ mod platform {
                 }
                 let tooltip = widget
                     .map(|widget| widget_tooltip(widget, limits))
-                    .unwrap_or_else(|| "Codex Minibar".into());
+                    .unwrap_or_else(|| "Codex Minibar Pace".into());
                 if self.last_tooltips.get(index) != Some(&tooltip) {
                     tray.set_tooltip(Some(&tooltip))?;
                     if index < self.last_tooltips.len() {
@@ -790,7 +790,7 @@ mod platform {
 
     fn make_menu(update_available: bool) -> Result<Menu> {
         let header = IconMenuItem::new(
-            format!("Codex Minibar - {}", env!("CARGO_PKG_VERSION")),
+            format!("Codex Minibar Pace - {}", env!("CARGO_PKG_VERSION")),
             false,
             None,
             None,

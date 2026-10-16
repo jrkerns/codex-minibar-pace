@@ -392,6 +392,32 @@ impl Renderer {
         }
     }
 
+    fn pace_line(&mut self, text: &str, size: f32) -> windows::core::Result<Line> {
+        let wide = text.encode_utf16().collect::<Vec<_>>();
+        unsafe {
+            let format = self.dwrite.CreateTextFormat(
+                w!("Consolas"),
+                None,
+                DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL,
+                size,
+                w!(""),
+            )?;
+            format.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP).ok()?;
+            let layout = self
+                .dwrite
+                .CreateTextLayout(&wide, &format, 4096.0, 256.0)?;
+            let mut metrics = DWRITE_TEXT_METRICS::default();
+            layout.GetMetrics(&mut metrics).ok()?;
+            Ok(Line {
+                layout,
+                width: metrics.widthIncludingTrailingWhitespace,
+                height: metrics.height,
+            })
+        }
+    }
+
     fn icon_bitmap(&mut self, icon: &Icon, size: f32) -> Option<ID2D1Bitmap> {
         let pixels = (size * self.dpi / 96.0).round().max(1.0) as u32;
         let key = IconKey {
@@ -437,11 +463,16 @@ impl Renderer {
     }
 
     fn content(&mut self, view: &WidgetView, metrics: Metrics) -> windows::core::Result<Content> {
+        if view.weekly_pace.is_some() {
+            return self.weekly_pace(view, metrics);
+        }
         if metrics.vertical {
             return self.column(view, metrics);
         }
         match view.style {
-            TaskbarWidgetStyle::Glance => self.glance(view, metrics),
+            TaskbarWidgetStyle::WeeklyPace | TaskbarWidgetStyle::Glance => {
+                self.glance(view, metrics)
+            }
             TaskbarWidgetStyle::Rings => self.rings(view, metrics),
             TaskbarWidgetStyle::Bars => self.bars(view, metrics),
             TaskbarWidgetStyle::Nested => self.nested(view, metrics),
@@ -608,6 +639,93 @@ impl Renderer {
             lines.push(self.row_runs(view, row, font, Weight::Semibold)?);
         }
         Ok(Self::stack(lines, x, metrics, false, prims))
+    }
+
+    fn weekly_pace(
+        &mut self,
+        view: &WidgetView,
+        metrics: Metrics,
+    ) -> windows::core::Result<Content> {
+        let pace = view.weekly_pace.as_ref().expect("weekly pace view");
+        let mut prims = Vec::new();
+        let font = if metrics.vertical {
+            16.0
+        } else {
+            (metrics.inner() * 0.53).clamp(14.0, 21.0)
+        };
+        let caption_font = metrics.line_font().min(11.0);
+        let mut number = self.pace_line(&pace.value, font)?;
+        // Fixed numeric columns: reserve the width of the largest signed value.
+        number.width = self.pace_line("+100", font)?.width;
+        let mut lines = vec![vec![
+            (
+                self.line("PACE", caption_font, Weight::Regular)?,
+                Tone::Secondary,
+            ),
+            (number, Tone::Tint(pace.color)),
+        ]];
+        if pace.secondary {
+            let mut remaining = self.line(&pace.remaining, caption_font, Weight::Regular)?;
+            remaining.width = self
+                .line("100% left *", caption_font, Weight::Regular)?
+                .width;
+            let mut runs = vec![
+                (
+                    self.line("WEEK", caption_font, Weight::Regular)?,
+                    Tone::Secondary,
+                ),
+                (remaining, Tone::Secondary),
+            ];
+            if let Some(countdown) = &pace.countdown {
+                let mut reset =
+                    self.line(&format!("· {countdown}"), caption_font, Weight::Regular)?;
+                reset.width = self.line("· 6d 23h", caption_font, Weight::Regular)?.width;
+                runs.push((reset, Tone::Secondary));
+            }
+            lines.push(runs);
+        }
+        if metrics.vertical {
+            // A vertical taskbar is narrow: stack the label and number; retain pace.
+            let mut y = PAD_VERTICAL;
+            let mut max_width = 0.0_f32;
+            let mut vertical = vec![
+                vec![(
+                    self.line("PACE", caption_font, Weight::Regular)?,
+                    Tone::Secondary,
+                )],
+                vec![(self.pace_line(&pace.value, font)?, Tone::Tint(pace.color))],
+            ];
+            if pace.secondary {
+                vertical.push(vec![(
+                    self.line(&pace.remaining, 9.0, Weight::Regular)?,
+                    Tone::Secondary,
+                )]);
+            }
+            for runs in vertical {
+                let width = runs_width(&runs);
+                let height = runs_height(&runs);
+                max_width = max_width.max(width);
+                Self::place_runs(
+                    runs,
+                    (metrics.thickness - width).max(0.0) / 2.0,
+                    y,
+                    height,
+                    &mut prims,
+                );
+                y += height;
+            }
+            let _ = max_width;
+            return Ok(Content {
+                length: y + PAD_VERTICAL,
+                prims,
+            });
+        }
+        let x = Self::leading_icon(view, metrics, &mut prims);
+        let width = Self::stack(lines, x, metrics, false, &mut prims);
+        Ok(Content {
+            length: x + width + PAD_END,
+            prims,
+        })
     }
 
     fn glance(&mut self, view: &WidgetView, metrics: Metrics) -> windows::core::Result<Content> {
@@ -1147,7 +1265,7 @@ impl Renderer {
                     y += BAR_THICKNESS + 6.0;
                 }
             }
-            TaskbarWidgetStyle::Glance => {}
+            TaskbarWidgetStyle::WeeklyPace | TaskbarWidgetStyle::Glance => {}
         }
         if values {
             for row in &view.rows {
@@ -1797,6 +1915,40 @@ impl Renderer {
                         tone: Tone::Secondary,
                     });
                     y += height;
+                }
+            }
+            for detail in &section.details {
+                let mut current = String::new();
+                let mut lines = Vec::new();
+                for word in detail.split_whitespace() {
+                    let candidate = if current.is_empty() {
+                        word.to_owned()
+                    } else {
+                        format!("{current} {word}")
+                    };
+                    if !current.is_empty()
+                        && self.line(&candidate, 11.0, Weight::Regular)?.width > inner
+                    {
+                        lines.push(std::mem::take(&mut current));
+                    }
+                    if !current.is_empty() {
+                        current.push(' ');
+                    }
+                    current.push_str(word);
+                }
+                if !current.is_empty() {
+                    lines.push(current);
+                }
+                for line in lines {
+                    let text = self.line(&line, 11.0, Weight::Regular)?;
+                    let height = text.height;
+                    prims.push(Prim::Text {
+                        layout: text.layout,
+                        x: CARD_PAD,
+                        y,
+                        tone: Tone::Secondary,
+                    });
+                    y += height + 3.0;
                 }
             }
             if let Some(today) = &section.today {

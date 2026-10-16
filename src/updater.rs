@@ -20,18 +20,18 @@ use zip::ZipArchive;
 use crate::notifications;
 use crate::single_instance::release_for_update;
 
-pub const GITHUB_OWNER: &str = "vertopolkaLF";
-pub const GITHUB_REPO: &str = "codex-minibar";
-pub const RELEASES_URL: &str = "https://github.com/vertopolkaLF/codex-minibar/releases";
-pub const REPO_URL: &str = "https://github.com/vertopolkaLF/codex-minibar";
-pub const ISSUES_URL: &str = "https://github.com/vertopolkaLF/codex-minibar/issues";
+pub const GITHUB_OWNER: &str = "jrkerns";
+pub const GITHUB_REPO: &str = "codex-minibar-pace";
+pub const RELEASES_URL: &str = "https://github.com/jrkerns/codex-minibar-pace/releases";
+pub const REPO_URL: &str = "https://github.com/jrkerns/codex-minibar-pace";
+pub const ISSUES_URL: &str = "https://github.com/jrkerns/codex-minibar-pace/issues";
 pub const PROVIDER_REQUEST_ISSUE_URL: &str =
-    "https://github.com/vertopolkaLF/codex-minibar/issues/new?template=03-provider-request.yml";
-pub const CONTRIBUTING_URL: &str = "https://github.com/vertopolkaLF/codex-minibar#contributing";
+    "https://github.com/jrkerns/codex-minibar-pace/issues/new?template=03-provider-request.yml";
+pub const CONTRIBUTING_URL: &str = "https://github.com/jrkerns/codex-minibar-pace#contributing";
 
 const LATEST_RELEASE_API: &str =
-    "https://api.github.com/repos/vertopolkaLF/codex-minibar/releases/latest";
-const APP_EXE: &str = "codex-minibar.exe";
+    "https://api.github.com/repos/jrkerns/codex-minibar-pace/releases/latest";
+const APP_EXE: &str = "codex-minibar-pace.exe";
 const USER_AGENT: &str = "codex-minibar-updater";
 const UPDATE_SUCCESS_MARKER: &str = ".update-success-pending";
 const UPDATE_STAGING_DIR: &str = ".update-staging";
@@ -179,7 +179,7 @@ fn megabytes(bytes: u64) -> String {
 fn report_download_started(version: &str) {
     notifications::show_update_progress(
         crate::i18n::tr("update-downloading"),
-        &format!("Codex Minibar {version}"),
+        &format!("Codex Minibar Pace {version}"),
         notifications::Progress::Indeterminate,
     );
 }
@@ -284,8 +284,9 @@ fn sync_uninstall_display_version(version: &str) -> Result<()> {
 
     // Installer writes HKCU (RequestExecutionLevel user) for each arch package.
     for arch in ["x86", "x64", "arm64"] {
-        let subkey =
-            format!(r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Codex Minibar {arch}");
+        let subkey = format!(
+            r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Codex Minibar Pace {arch}"
+        );
         let subkey_w: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
         let mut key: HKEY = std::ptr::null_mut();
         let status = unsafe {
@@ -782,7 +783,7 @@ try {{
     }}
     Set-Content -LiteralPath (Join-Path $install '{marker}') -Value '{version}' -Encoding utf8 -NoNewline
     foreach ($arch in @('x86', 'x64', 'arm64')) {{
-        $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Codex Minibar $arch"
+        $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Codex Minibar Pace $arch"
         if (Test-Path -LiteralPath $key) {{
             Set-ItemProperty -LiteralPath $key -Name DisplayVersion -Value '{version}'
         }}
@@ -1056,7 +1057,7 @@ mod tests {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, b"").unwrap();
         };
-        touch("codex-minibar.exe");
+        touch("codex-minibar-pace.exe");
         touch("Uninstall.exe");
         touch("Microsoft.ui.xaml.dll");
         touch("resources.pri");
@@ -1077,7 +1078,7 @@ mod tests {
         remove_update_staging(&dir.join(UPDATE_STAGING_DIR));
 
         for kept in [
-            "codex-minibar.exe",
+            "codex-minibar-pace.exe",
             "Uninstall.exe",
             "en-us/Microsoft.ui.xaml.dll.mui",
             "en-us/notes.txt",

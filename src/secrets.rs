@@ -297,7 +297,7 @@ pub fn contains_prefix(prefix: &str) -> bool {
 }
 
 fn path() -> Result<PathBuf> {
-    ProjectDirs::from("dev", "Codex Minibar", "Codex Minibar")
+    ProjectDirs::from("dev", "Codex Minibar Pace", "Codex Minibar Pace")
         .map(|dirs| dirs.config_dir().join(FILE_NAME))
         .context("could not resolve the provider secrets directory")
 }

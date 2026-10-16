@@ -143,9 +143,9 @@ fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
 }
 
-const CONTROLLER_CLASS: &str = "CodexMinibarTaskbarController";
-const WIDGET_CLASS: &str = "CodexMinibarTaskbarWidgets";
-const CARD_CLASS: &str = "CodexMinibarTaskbarCard";
+const CONTROLLER_CLASS: &str = "CodexMinibarPaceTaskbarController";
+const WIDGET_CLASS: &str = "CodexMinibarPaceTaskbarWidgets";
+const CARD_CLASS: &str = "CodexMinibarPaceTaskbarCard";
 
 fn run() {
     unsafe {
@@ -338,7 +338,7 @@ fn context_menu(owner: HWND, target: MenuTarget) -> Option<Action> {
             let text = wide(text);
             AppendMenuW(menu, flags, id, text.as_ptr());
         };
-        let header = format!("Codex Minibar - {}", env!("CARGO_PKG_VERSION"));
+        let header = format!("Codex Minibar Pace - {}", env!("CARGO_PKG_VERSION"));
         append(MF_STRING | MF_GRAYED, 0, &header);
         AppendMenuW(menu, MF_SEPARATOR, 0, null_mut());
         if target.widget.is_some() {
@@ -1034,7 +1034,7 @@ impl Host {
         }
         unsafe {
             let class = wide(WIDGET_CLASS);
-            let title = wide("Codex Minibar Taskbar Widgets");
+            let title = wide("Codex Minibar Pace Taskbar Widgets");
             // Created top-level, then re-parented: Windows refuses a child
             // created directly under another process's window.
             let window = CreateWindowExW(

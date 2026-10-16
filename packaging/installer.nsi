@@ -1,4 +1,4 @@
-; Codex Minibar NSIS installer template. Placeholders are filled by build.ps1.
+; Codex Minibar Pace NSIS installer template. Placeholders are filled by build.ps1.
 
 Unicode true
 ManifestDPIAware true
@@ -32,9 +32,9 @@ VIAddVersionKey "LegalCopyright" "Copyright (C) {{PUBLISHER}}"
 ; Finish page: both checkboxes checked by default (do not set *_NOTCHECKED).
 ; Custom leave runs BEFORE MUI launches the app so the Run key exists first.
 ; The app then reconciles start_at_login from that key (NSIS must not rewrite
-; UTF-8 settings.toml — Unicode FileWrite would corrupt it).
-!define MUI_FINISHPAGE_RUN "$INSTDIR\codex-minibar.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "Launch Codex Minibar"
+; UTF-8 settings.toml â€” Unicode FileWrite would corrupt it).
+!define MUI_FINISHPAGE_RUN "$INSTDIR\codex-minibar-pace.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch Codex Minibar Pace"
 !define MUI_FINISHPAGE_SHOWREADME ""
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Add to Startup"
 !define MUI_FINISHPAGE_SHOWREADME_FUNCTION StartupCheckboxNoop
@@ -48,7 +48,7 @@ VIAddVersionKey "LegalCopyright" "Copyright (C) {{PUBLISHER}}"
 {{INIT_REG_VIEW}}
 
 !macro KillRunningAppBody
-  ; Kill via Win32 APIs only — no cmd/taskkill/powershell console flash.
+  ; Kill via Win32 APIs only â€” no cmd/taskkill/powershell console flash.
   Push $0
   Push $1
   Push $2
@@ -56,7 +56,7 @@ VIAddVersionKey "LegalCopyright" "Copyright (C) {{PUBLISHER}}"
   Push $4
   Push $5
 
-  ; TH32CS_SNAPPROCESS = 2. NSIS installer is 32-bit → PROCESSENTRY32W is 556 bytes.
+  ; TH32CS_SNAPPROCESS = 2. NSIS installer is 32-bit â†’ PROCESSENTRY32W is 556 bytes.
   System::Call 'kernel32::CreateToolhelp32Snapshot(i 2, i 0) i .r0'
   ${If} $0 <> -1
     System::Alloc 556
@@ -66,7 +66,7 @@ VIAddVersionKey "LegalCopyright" "Copyright (C) {{PUBLISHER}}"
     ${While} $2 <> 0
       ; th32ProcessID -> $3, szExeFile -> $4
       System::Call '*$1(i,i,i.r3,i,i,i,i,i,i,&w260.r4)'
-      ${If} $4 == "codex-minibar.exe"
+      ${If} $4 == "codex-minibar-pace.exe"
         ; PROCESS_TERMINATE = 0x0001
         System::Call 'kernel32::OpenProcess(i 0x0001, i 0, i r3) i .r5'
         ${If} $5 <> 0
@@ -112,9 +112,9 @@ FunctionEnd
 Function SyncStartAtLogin
   ${If} $R0 == "true"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" \
-      "Codex Minibar" '"$INSTDIR\codex-minibar.exe"'
+      "Codex Minibar Pace" '"$INSTDIR\codex-minibar-pace.exe"'
   ${Else}
-    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Codex Minibar"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Codex Minibar Pace"
   ${EndIf}
 FunctionEnd
 
@@ -185,15 +185,15 @@ Section "Install"
   File /r "{{SOURCE_DIR}}\*.*"
 
   CreateDirectory "$SMPROGRAMS\{{PRODUCT_NAME}}"
-  CreateShortCut "$SMPROGRAMS\{{PRODUCT_NAME}}\{{PRODUCT_NAME}}.lnk" "$INSTDIR\codex-minibar.exe"
-  CreateShortCut "$DESKTOP\{{PRODUCT_NAME}}.lnk" "$INSTDIR\codex-minibar.exe"
+  CreateShortCut "$SMPROGRAMS\{{PRODUCT_NAME}}\{{PRODUCT_NAME}}.lnk" "$INSTDIR\codex-minibar-pace.exe"
+  CreateShortCut "$DESKTOP\{{PRODUCT_NAME}}.lnk" "$INSTDIR\codex-minibar-pace.exe"
 
   ; Make both executable names discoverable by ShellExecute/Win+R without
   ; adding the per-user install directory to PATH.
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\codex-minibar.exe" "" "$INSTDIR\codex-minibar.exe"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\codex-minibar.exe" "Path" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\minibar.exe" "" "$INSTDIR\codex-minibar.exe"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\minibar.exe" "Path" "$INSTDIR"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\codex-minibar-pace.exe" "" "$INSTDIR\codex-minibar-pace.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\codex-minibar-pace.exe" "Path" "$INSTDIR"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\minibar-pace.exe" "" "$INSTDIR\codex-minibar-pace.exe"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\minibar-pace.exe" "Path" "$INSTDIR"
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -204,7 +204,7 @@ Section "Install"
   WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT_NAME}} {{ARCH}}" \
     "Publisher" "{{PUBLISHER}}"
   WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT_NAME}} {{ARCH}}" \
-    "DisplayIcon" "$INSTDIR\codex-minibar.exe"
+    "DisplayIcon" "$INSTDIR\codex-minibar-pace.exe"
   WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT_NAME}} {{ARCH}}" \
     "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT_NAME}} {{ARCH}}" \
@@ -221,10 +221,10 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\{{PRODUCT_NAME}}\{{PRODUCT_NAME}}.lnk"
   RMDir "$SMPROGRAMS\{{PRODUCT_NAME}}"
 
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\codex-minibar.exe"
-  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\minibar.exe"
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\codex-minibar-pace.exe"
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\App Paths\minibar-pace.exe"
 
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Codex Minibar"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Codex Minibar Pace"
   DeleteRegKey SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{PRODUCT_NAME}} {{ARCH}}"
 
   RMDir /r "$INSTDIR"
