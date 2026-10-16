@@ -687,7 +687,6 @@ impl Renderer {
         if metrics.vertical {
             // A vertical taskbar is narrow: stack the label and number; retain pace.
             let mut y = PAD_VERTICAL;
-            let mut max_width = 0.0_f32;
             let mut vertical = vec![
                 vec![(
                     self.line("PACE", caption_font, Weight::Regular)?,
@@ -704,7 +703,6 @@ impl Renderer {
             for runs in vertical {
                 let width = runs_width(&runs);
                 let height = runs_height(&runs);
-                max_width = max_width.max(width);
                 Self::place_runs(
                     runs,
                     (metrics.thickness - width).max(0.0) / 2.0,
@@ -714,7 +712,6 @@ impl Renderer {
                 );
                 y += height;
             }
-            let _ = max_width;
             return Ok(Content {
                 length: y + PAD_VERTICAL,
                 prims,
@@ -2245,5 +2242,60 @@ pub(crate) fn snapshot(
             height: height as u32,
             rgba,
         })
+    }
+}
+
+#[cfg(test)]
+mod weekly_pace_render_tests {
+    use super::*;
+    use crate::{
+        instances::ProviderId,
+        limits::ProviderLimits,
+        settings::{ProviderKind, TaskbarWidget},
+    };
+    #[test]
+    fn signed_values_stay_inside_fixed_columns_at_every_compaction_level() {
+        let appearance = Appearance {
+            light: false,
+            colored_icons: true,
+            accent: [0, 120, 212],
+        };
+        let widget = TaskbarWidget::weekly_pace(ProviderId::primary(ProviderKind::Codex));
+        let mut view =
+            super::super::model::resolve(&widget, &ProviderLimits::default(), appearance);
+        let mut renderer = Renderer::new().unwrap();
+        for value in ["+100", "-100", "+10", "-10", "0", "—"] {
+            view.weekly_pace.as_mut().unwrap().value = value.into();
+            view.weekly_pace.as_mut().unwrap().remaining = "100% left *".into();
+            for height in [40.0, 48.0, 64.0] {
+                for level in 0..=super::super::model::COMPACT_LEVELS {
+                    let compact = view.compacted(level);
+                    let metrics = Metrics {
+                        scale: 1.0,
+                        thickness: height,
+                        vertical: false,
+                    };
+                    let content = renderer.content(&compact, metrics).unwrap();
+                    for primitive in &content.prims {
+                        if let Prim::Text { layout, x, y, .. } = primitive {
+                            let mut measured = DWRITE_TEXT_METRICS::default();
+                            unsafe {
+                                layout.GetMetrics(&mut measured).ok().unwrap();
+                            }
+                            assert!(*x >= 0.0 && *y >= 0.0, "negative text origin: {value}");
+                            assert!(
+                                *x + measured.widthIncludingTrailingWhitespace
+                                    <= content.length + 0.5,
+                                "text exceeds width: {value}"
+                            );
+                            assert!(
+                                *y + measured.height <= height + 0.5,
+                                "text exceeds height: {value}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }

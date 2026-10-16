@@ -220,7 +220,16 @@ pub fn tip(
     show_used: bool,
     now: DateTime<Utc>,
 ) -> Option<PaceTip> {
-    let schedule = current();
+    tip_with_schedule(provider, weekly, window, show_used, now, &current())
+}
+fn tip_with_schedule(
+    provider: ProviderId,
+    weekly: bool,
+    window: &LimitWindow,
+    show_used: bool,
+    now: DateTime<Utc>,
+    schedule: &WorkSchedule,
+) -> Option<PaceTip> {
     if provider.kind() != ProviderKind::Codex || !weekly || !schedule.enabled {
         return window.pace_tip(show_used, now);
     }
@@ -231,7 +240,7 @@ pub fn tip(
     {
         return None;
     }
-    let expected = expected(&schedule, window, now, &Local).ok()?;
+    let expected = expected(schedule, window, now, &Local).ok()?;
     Some(PaceTip {
         percent: if show_used {
             expected
@@ -448,6 +457,40 @@ mod tests {
             boundary(&Central2026, day, 90, true).unwrap()
                 - boundary(&Central2026, day, 90, false).unwrap(),
             Duration::hours(1)
+        );
+    }
+    #[test]
+    fn non_weekly_and_other_providers_preserve_original_pace() {
+        let w = window(30);
+        let now = at(14, 9);
+        let s = schedule();
+        for provider in [
+            ProviderId::primary(ProviderKind::Codex),
+            ProviderId::primary(ProviderKind::Claude),
+        ] {
+            for weekly in [false, true] {
+                if provider.kind() == ProviderKind::Codex && weekly {
+                    continue;
+                }
+                for show_used in [false, true] {
+                    assert_eq!(
+                        tip_with_schedule(provider, weekly, &w, show_used, now, &s),
+                        w.pace_tip(show_used, now)
+                    );
+                }
+            }
+        }
+        let disabled = WorkSchedule::default();
+        assert_eq!(
+            tip_with_schedule(
+                ProviderId::primary(ProviderKind::Codex),
+                true,
+                &w,
+                false,
+                now,
+                &disabled
+            ),
+            w.pace_tip(false, now)
         );
     }
 }
