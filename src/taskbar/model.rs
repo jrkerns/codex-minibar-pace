@@ -293,11 +293,15 @@ fn resolve_row(
         }
         _ => full_label.clone(),
     };
+    let is_weekly = indicator.metric_id == "codex.weekly"
+        && metric
+            .as_ref()
+            .is_some_and(|metric| metric.resolved_id == "codex.weekly");
     let window = metric.map(|metric| metric.window).unwrap_or_default();
     let snapshot = limits.get(provider);
     let pace = crate::pace::tip(
         provider,
-        indicator.metric_id == "codex.weekly",
+        is_weekly,
         &window,
         indicator.limit_value == LimitValue::Used,
         now,
@@ -352,6 +356,16 @@ pub(crate) fn resolve(
         .take(style.max_indicators())
         .filter_map(|indicator| resolve_row(indicator, limits, appearance, now))
         .collect::<Vec<_>>();
+    if style == TaskbarWidgetStyle::WeeklyPace
+        && let Some(provider) = widget.provider()
+    {
+        rows = vec![raw_weekly_row(
+            provider,
+            limits.get(provider),
+            appearance,
+            now,
+        )];
+    }
     for row in &mut rows {
         row.reset = row
             .resets_at
@@ -424,7 +438,7 @@ fn card_sections(
             // A metric without data of its own can resolve to another one
             // (a reserve falling back to the session); list each quota once.
             let mut seen = Vec::new();
-            let rows = crate::widget_data::snapshot(provider, limits)
+            let mut rows = crate::widget_data::snapshot(provider, limits)
                 .metrics
                 .into_iter()
                 .filter(|metric| {
@@ -452,6 +466,9 @@ fn card_sections(
                 })
                 .collect();
             let provider_limits = limits.get(provider);
+            if widget.style == TaskbarWidgetStyle::WeeklyPace {
+                rows = vec![raw_weekly_row(provider, provider_limits, appearance, now)];
+            }
             CardSection {
                 provider,
                 icon: icon_for(provider, appearance),
@@ -482,6 +499,37 @@ fn card_sections(
         .collect()
 }
 
+fn raw_weekly_row(
+    provider: ProviderId,
+    snapshot: &crate::limits::RateLimits,
+    appearance: Appearance,
+    now: DateTime<Utc>,
+) -> Row {
+    let empty = crate::limits::LimitWindow::default();
+    let window = if snapshot.is_free_plan() {
+        &empty
+    } else {
+        &snapshot.secondary
+    };
+    let remaining = window.remaining_percent();
+    let tip = crate::pace::tip(provider, true, window, false, now)
+        .filter(|_| crate::pace::is_fresh(provider, snapshot.sampled_at, now));
+    Row {
+        provider,
+        label: "WEEK".into(),
+        full_label: "Weekly allowance".into(),
+        value: remaining.map_or_else(|| "—".into(), |value| format!("{value}%")),
+        progress: remaining.map(|value| f32::from(value) / 100.0),
+        pace: tip.map(|tip| (tip.percent / 100.0) as f32),
+        color: appearance.status(remaining),
+        tinted: remaining.is_some(),
+        resets_at: window.resets_at,
+        icon: icon_for(provider, appearance),
+        limit_value: LimitValue::Remaining,
+        reset: None,
+    }
+}
+
 /// Shared widget/hover data. Never resolves the weekly source through a reserve fallback.
 fn weekly_pace_view(
     provider: ProviderId,
@@ -490,7 +538,12 @@ fn weekly_pace_view(
     appearance: Appearance,
     now: DateTime<Utc>,
 ) -> (WeeklyPaceView, Vec<String>) {
-    let window = &snapshot.secondary;
+    let empty = crate::limits::LimitWindow::default();
+    let window = if snapshot.is_free_plan() {
+        &empty
+    } else {
+        &snapshot.secondary
+    };
     let fresh = crate::pace::is_fresh(provider, snapshot.sampled_at, now);
     let expected = if schedule.enabled {
         crate::pace::expected(schedule, window, now, &Local)
