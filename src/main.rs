@@ -28,6 +28,9 @@ fn run() -> Result<()> {
         eprintln!("failed to hydrate pricing catalog: {error:#}");
     }
     let mut settings = Settings::load_or_create(&path)?;
+    if settings.discover_weekly_claude() {
+        settings.save(&path)?;
+    }
     settings.language.apply();
     let just_updated = show_post_update_success_if_needed();
     if let Err(error) = settings.reconcile_startup_from_registry(&path) {
@@ -149,7 +152,7 @@ fn show_error(message: &str) {
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
-        let caption: Vec<u16> = OsStr::new("Codex Minibar")
+        let caption: Vec<u16> = OsStr::new("Codex Minibar Pace")
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
@@ -172,7 +175,7 @@ fn main() {
     if troubleshoot::is_cli_request() {
         if let Err(error) = troubleshoot::launch_cli_picker() {
             show_error(&format!(
-                "Could not start Codex Minibar troubleshooting: {error:#}"
+                "Could not start Codex Minibar Pace troubleshooting: {error:#}"
             ));
         }
         return;
@@ -183,7 +186,7 @@ fn main() {
         Ok(None) => return,
         Err(error) => {
             show_error(&format!(
-                "Codex Minibar could not enforce a single instance: {error:#}"
+                "Codex Minibar Pace could not enforce a single instance: {error:#}"
             ));
             return;
         }
@@ -196,7 +199,7 @@ fn main() {
         eprintln!("could not clean abandoned Codex sign-in directories: {error:#}");
     }
     if let Err(error) = run() {
-        show_error(&format!("Codex Minibar failed: {error:#}"));
+        show_error(&format!("Codex Minibar Pace failed: {error:#}"));
     }
     single_instance::release_for_update();
 }

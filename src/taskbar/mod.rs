@@ -34,6 +34,7 @@ pub(crate) const WIDGET_GAP: f32 = 4.0;
 pub(crate) struct Config {
     pub(crate) taskbar: TaskbarSettings,
     pub(crate) colored_icons: bool,
+    pub(crate) schedule: crate::pace::WorkSchedule,
 }
 
 impl Config {
@@ -41,6 +42,7 @@ impl Config {
         Self {
             taskbar: settings.taskbar.clone(),
             colored_icons: settings.use_colored_provider_icons,
+            schedule: settings.weekly_work_schedule.clone(),
         }
     }
 }
@@ -251,7 +253,12 @@ mod tests {
             codex,
             RateLimits {
                 primary: window(58),
-                secondary: window(5),
+                secondary: LimitWindow {
+                    duration_minutes: Some(10_080),
+                    resets_at: Some(chrono::Utc::now() + chrono::Duration::days(3)),
+                    ..window(30)
+                },
+                sampled_at: chrono::Utc::now(),
                 ..RateLimits::default()
             },
         )]);
@@ -319,6 +326,104 @@ mod tests {
                     let name =
                         format!("strip-{}-{scale}.png", if light { "light" } else { "dark" });
                     std::fs::write(std::path::Path::new(&dir).join(name), &preview.png).unwrap();
+                }
+            }
+        }
+    }
+    #[test]
+    fn weekly_pace_previews_fit_compact_taskbars_and_common_scales() {
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        let widget = TaskbarWidget::weekly_pace(codex);
+        for used in [0, 50, 100] {
+            let (_, mut limits) = sample();
+            limits.get_mut(codex).secondary.used_percent = Some(used);
+            for light in [false, true] {
+                let appearance = model::Appearance {
+                    light,
+                    colored_icons: true,
+                    accent: [0, 120, 212],
+                };
+                for height in [40.0, 48.0, 64.0] {
+                    for scale in [1.0, 1.25, 1.5, 2.0] {
+                        let preview = preview(
+                            std::slice::from_ref(&widget),
+                            &limits,
+                            appearance,
+                            scale,
+                            height,
+                        )
+                        .expect("weekly preview renders");
+                        assert!((preview.height - height).abs() < 1.0);
+                        assert!(preview.width >= 100.0 && preview.width < 400.0);
+                        if let Ok(dir) = std::env::var("TASKBAR_PREVIEW_DIR") {
+                            let name = format!(
+                                "pace-{used}-{}-{height}-{scale}.png",
+                                if light { "light" } else { "dark" }
+                            );
+                            std::fs::write(std::path::Path::new(&dir).join(name), &preview.png)
+                                .unwrap();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod rotation_previews {
+    use super::*;
+    use crate::{
+        limits::{LimitWindow, RateLimits},
+        settings::{ProviderKind, TaskbarWidget},
+    };
+    #[test]
+    fn both_rotation_frames_render_at_common_scales_and_themes() {
+        let c = ProviderId::primary(ProviderKind::Codex);
+        let a = ProviderId::primary(ProviderKind::Claude);
+        let now = chrono::Utc::now();
+        let limits = ProviderLimits::from_entries([c, a].into_iter().map(|provider| {
+            (
+                provider,
+                RateLimits {
+                    sampled_at: now,
+                    secondary: LimitWindow {
+                        used_percent: Some(if provider == c { 30 } else { 60 }),
+                        duration_minutes: Some(10080),
+                        resets_at: Some(now + chrono::Duration::days(3)),
+                    },
+                    ..RateLimits::default()
+                },
+            )
+        }));
+        let widgets = vec![TaskbarWidget::weekly_pace(c)];
+        for turn in 0..2 {
+            for light in [false, true] {
+                for scale in [1.0, 1.25, 1.5, 2.0] {
+                    for height in [40.0, 48.0, 64.0] {
+                        let rotated = model::rotated_widgets(&widgets, &[c, a], turn);
+                        let image = preview(
+                            &rotated,
+                            &limits,
+                            model::Appearance {
+                                light,
+                                colored_icons: true,
+                                accent: [0, 120, 212],
+                            },
+                            scale,
+                            height,
+                        )
+                        .unwrap();
+                        assert!(image.width >= 100.0 && image.width < 400.0);
+                        if let Ok(dir) = std::env::var("TASKBAR_PREVIEW_DIR") {
+                            std::fs::write(
+                                std::path::Path::new(&dir)
+                                    .join(format!("rotation-{turn}-{light}-{height}-{scale}.png")),
+                                image.png,
+                            )
+                            .unwrap();
+                        }
+                    }
                 }
             }
         }

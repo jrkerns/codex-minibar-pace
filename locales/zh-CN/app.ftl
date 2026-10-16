@@ -1,4 +1,4 @@
-# Codex Minibar — zh-CN
+# Codex Minibar Pace — zh-CN
 # Full Fluent catalog; parameters and technical names remain unchanged.
 
 luna-reserve = Luna 储备额度
@@ -656,7 +656,7 @@ msg-60-minutes = 60 分钟
 
 start-with-windows = 随 Windows 启动
 
-open-codex-minibar-in-the-tray-when-you-sign-in = 登录 Windows 时在托盘中打开 Codex Minibar。
+open-codex-minibar-in-the-tray-when-you-sign-in = 登录 Windows 时在托盘中打开 Codex Minibar Pace。
 
 refresh-interval = 刷新间隔
 
@@ -1316,7 +1316,7 @@ app-icon = 应用图标
 
 widget = 组件 { $v0 }
 
-the-codex-minibar-icon = Codex Minibar 图标
+the-codex-minibar-icon = Codex Minibar Pace 图标
 
 style-no-indicators = { $style } · 无指示器
 
@@ -1340,7 +1340,7 @@ edit = 编辑
 
 duplicate = 复制
 
-shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = 在通知区域显示 Codex Minibar 图标。没有需要配置的指示器。
+shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = 在通知区域显示 Codex Minibar Pace 图标。没有需要配置的指示器。
 
 style = 样式
 
@@ -1404,9 +1404,9 @@ english = English
 
 msg-russian = Русский
 
-codex-minibar-settings = Codex Minibar 设置
+codex-minibar-settings = Codex Minibar Pace 设置
 
-welcome-to-codex-minibar = 欢迎使用 Codex Minibar
+welcome-to-codex-minibar = 欢迎使用 Codex Minibar Pace
 
 exit = 退出
 
@@ -1701,7 +1701,7 @@ update-installing = 正在安装更新
 update-unpacking = 正在解压文件…
 
 # src/updater.rs
-update-restarting = 正在重启 Codex Minibar
+update-restarting = 正在重启 Codex Minibar Pace
 
 # src/updater.rs
 update-restarting-body = 应用即将重新打开。
@@ -1801,7 +1801,7 @@ taskbar-style-glance = 速览
 taskbar-style-glance-hint = 提供商图标旁边显示两行文字，就像天气按钮。
 taskbar-style-rings-hint = 每个额度一个进度环，旁边显示数值。
 taskbar-style-bars-hint = 在提供商图标旁边堆叠细进度条。
-taskbar-menu-open = 打开 Codex Minibar
+taskbar-menu-open = 打开 Codex Minibar Pace
 taskbar-menu-settings = 任务栏组件设置
 taskbar-menu-hide = 隐藏任务栏组件
 taskbar-card-left = 剩余 { $value }
@@ -1962,3 +1962,6 @@ cmdpal-content-hint = Dock 将条带显示为标题和下方的副标题。
 
 # src/settings_window/command_palette.rs
 cmdpal-indicators-hint = 最多 2 个额度：一个占用标题和副标题，两个各占一行。
+
+weekly-pace-style = Weekly pace
+weekly-pace-style-hint = Signed weekly headroom over scheduled working hours.

@@ -18,6 +18,7 @@ pub mod logger;
 pub mod notifications;
 pub mod opencode;
 pub mod openrouter;
+pub mod pace;
 pub mod popup;
 pub mod popup_window;
 pub mod pricing;

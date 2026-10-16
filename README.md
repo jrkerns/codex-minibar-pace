@@ -1,3 +1,13 @@
+# Codex Minibar Pace
+
+A personal fork with a larger **weekly pace** taskbar widget and configurable working days/hours. `+10` means ten percentage points of weekly allowance in reserve against your work schedule.
+
+See [setup, calculation, and acceptance checks](docs/weekly-pace.md). Download the portable ZIP from the latest successful **Pace validation and portable build** workflow on branch `codex/weekly-workday-pace`.
+
+Upstream documentation follows. Fork application identity, settings, executable, and updater are separate; upstream download links below refer to the original application.
+
+---
+
 <p align="center">
   <img src="assets/app-icon.png" alt="Codex Minibar logo" width="256" height="256">
 </p>

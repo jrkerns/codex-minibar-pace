@@ -38,7 +38,7 @@ pub fn cleanup() -> Result<()> {
         return Ok(());
     }
     let local = std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is unavailable")?;
-    cleanup_in(&PathBuf::from(local).join("Codex Minibar/desktop-cli"))
+    cleanup_in(&PathBuf::from(local).join("Codex Minibar Pace/desktop-cli"))
 }
 
 fn cleanup_in(root: &Path) -> Result<()> {
@@ -123,7 +123,7 @@ pub(super) fn package_for_source(source: &Path) -> Option<(String, Version)> {
 pub(crate) fn prepare(source: &Path) -> Result<PreparedCli> {
     if cfg!(windows) {
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            let root = PathBuf::from(local).join("Codex Minibar/desktop-cli");
+            let root = PathBuf::from(local).join("Codex Minibar Pace/desktop-cli");
             if package_for_source(source).is_some() {
                 return prepare_in(source, &root);
             }

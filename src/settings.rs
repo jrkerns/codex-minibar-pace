@@ -1732,6 +1732,8 @@ impl TrayWidget {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskbarWidgetStyle {
+    /// A large signed weekly pace above remaining quota and reset.
+    WeeklyPace,
     /// Provider mark beside two lines of text, like the Windows weather
     /// button. Also reads the retired text-only `compact` design, which is
     /// a Glance without the mark.
@@ -1752,7 +1754,8 @@ pub enum TaskbarWidgetStyle {
 
 impl TaskbarWidgetStyle {
     /// Picker order: text designs first, then by graphic.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
+        Self::WeeklyPace,
         Self::Glance,
         Self::Rings,
         Self::Nested,
@@ -1764,6 +1767,7 @@ impl TaskbarWidgetStyle {
     /// How many indicators fit the taskbar height in this design.
     pub const fn max_indicators(self) -> usize {
         match self {
+            Self::WeeklyPace => 1,
             Self::Glance => 2,
             Self::Rings | Self::Bars | Self::Nested | Self::Dials | Self::Meters => 3,
         }
@@ -1778,7 +1782,7 @@ impl TaskbarWidgetStyle {
 
     /// Draws progress graphics, which can carry a pace marker.
     pub const fn has_graphic(self) -> bool {
-        !matches!(self, Self::Glance)
+        !matches!(self, Self::Glance | Self::WeeklyPace)
     }
 
     /// Writes indicator names next to values.
@@ -1910,6 +1914,14 @@ impl TaskbarWidget {
         }
     }
 
+    pub fn weekly_pace(provider: ProviderId) -> Self {
+        Self {
+            style: TaskbarWidgetStyle::WeeklyPace,
+            indicators: vec![TrayIndicator::new(provider, weekly_metric(provider))],
+            ..Self::for_provider(provider)
+        }
+    }
+
     pub fn duplicate_with_new_id(&self) -> Self {
         let mut copy = self.clone();
         copy.id = new_taskbar_widget_id();
@@ -1934,6 +1946,17 @@ impl TaskbarWidget {
         if self.id.is_empty() {
             self.id = new_taskbar_widget_id();
             changed = true;
+        }
+        if self.style == TaskbarWidgetStyle::WeeklyPace {
+            let provider = self
+                .provider()
+                .filter(|provider| crate::pace::supports(provider.kind()))
+                .unwrap_or_else(|| ProviderId::primary(ProviderKind::Codex));
+            let indicators = vec![TrayIndicator::new(provider, weekly_metric(provider))];
+            if self.indicators != indicators {
+                self.indicators = indicators;
+                changed = true;
+            }
         }
         let max = self.style.max_indicators();
         if self.indicators.len() > max {
@@ -1994,10 +2017,27 @@ impl TaskbarWidget {
     }
 }
 
+pub(crate) fn weekly_metric(provider: ProviderId) -> &'static str {
+    if provider.kind() == ProviderKind::Claude {
+        "claude.weekly"
+    } else {
+        "codex.weekly"
+    }
+}
+
+fn rotate_weekly_default() -> bool {
+    true
+}
+
 /// Live widgets drawn inside the Windows taskbar.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TaskbarSettings {
+    /// Rotate the weekly widget between enabled Codex and Claude accounts.
+    #[serde(default = "rotate_weekly_default")]
+    pub rotate_weekly: bool,
+    /// One-time discovery; subsequently respect explicit provider disablement.
+    pub claude_detection_done: bool,
     pub enabled: bool,
     pub alignment: TaskbarAlignment,
     /// Shows one widget at a time; the scroll wheel over it switches.
@@ -2162,6 +2202,8 @@ pub struct Settings {
     #[serde(default = "default_show_usage_values")]
     pub show_usage_values: bool,
     pub show_usage_pace: bool,
+    #[serde(default)]
+    pub weekly_work_schedule: crate::pace::WorkSchedule,
     /// Per-card visibility for popup Home and provider tabs.
     pub popup_visibility: PopupVisibility,
     /// Shows the Usage Stats widget on the popup's Home tab.
@@ -2241,6 +2283,10 @@ impl Default for Settings {
             show_used_percentage: false,
             show_usage_values: true,
             show_usage_pace: true,
+            weekly_work_schedule: crate::pace::WorkSchedule {
+                enabled: true,
+                ..Default::default()
+            },
             popup_visibility: PopupVisibility::build_defaults(),
             show_total_spend_on_all_tab: true,
             total_spend_presentation: TotalSpendPresentation::default(),
@@ -2261,6 +2307,10 @@ impl Default for Settings {
             game_mode_ignored: Vec::new(),
         };
         settings.enable_taskbar_by_default();
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        settings.taskbar.widgets = vec![TaskbarWidget::weekly_pace(codex)];
+        settings.taskbar.click = TaskbarClick::Tab;
+        settings.taskbar.rotate_weekly = true;
         settings
     }
 }
@@ -2287,8 +2337,57 @@ impl Settings {
         changed
     }
 
+    /// Discover Claude without launching its CLI or changing an existing account.
+    pub fn discover_weekly_claude(&mut self) -> bool {
+        if self.taskbar.claude_detection_done
+            || !self.taskbar.rotate_weekly
+            || !self
+                .taskbar
+                .widgets
+                .iter()
+                .any(|w| w.style == TaskbarWidgetStyle::WeeklyPace)
+        {
+            return false;
+        }
+        let enabled = self
+            .instances
+            .iter()
+            .any(|i| i.driver == ProviderKind::Claude && i.enabled);
+        let path = self
+            .instances
+            .iter()
+            .find(|i| i.driver == ProviderKind::Claude)
+            .and_then(|i| i.binary_path.as_deref());
+        self.enable_discovered_claude(enabled || crate::claude::is_installed(path))
+    }
+
+    fn enable_discovered_claude(&mut self, installed: bool) -> bool {
+        if self.taskbar.claude_detection_done || !installed {
+            return false;
+        }
+        self.taskbar.claude_detection_done = true;
+        if !self
+            .instances
+            .iter()
+            .any(|i| i.driver == ProviderKind::Claude && i.enabled)
+        {
+            if let Some(instance) = self
+                .instances
+                .iter_mut()
+                .find(|i| i.driver == ProviderKind::Claude && i.is_primary())
+            {
+                instance.enabled = true;
+            } else {
+                let mut instance = ProviderInstance::primary(ProviderKind::Claude);
+                instance.enabled = true;
+                self.instances.push(instance);
+            }
+        }
+        true
+    }
+
     pub fn default_path() -> Result<PathBuf> {
-        let dirs = ProjectDirs::from("dev", "Codex Minibar", "Codex Minibar")
+        let dirs = ProjectDirs::from("dev", "Codex Minibar Pace", "Codex Minibar Pace")
             .context("could not resolve the application config directory")?;
         Ok(dirs.config_dir().join("settings.toml"))
     }
@@ -2382,6 +2481,13 @@ impl Settings {
         // be current — a stamped version must never leave us unable to decode.
         let healed_tray = heal_legacy_tray_widgets(&mut document);
         let mut dirty = healed_tray;
+        // Serde container defaults otherwise inherit fresh-install pacing.
+        if document.get("weekly_work_schedule").is_none() {
+            document.as_table_mut().expect("settings table").insert(
+                "weekly_work_schedule".into(),
+                toml::Value::try_from(crate::pace::WorkSchedule::default())?,
+            );
+        }
         if original_version < SETTINGS_VERSION {
             migrate(&mut document, original_version)?;
             dirty = true;
@@ -2908,6 +3014,8 @@ impl Settings {
 
     /// Applies settings whose effect lives outside the render tree.
     pub fn apply_runtime_effects(&self) -> Result<()> {
+        crate::pace::publish(&self.weekly_work_schedule);
+        crate::pace::publish_intervals(&self.instances);
         if !crate::settings_window::has_pending_edits() {
             self.language.apply();
         }
@@ -2965,7 +3073,7 @@ fn startup_registration_present() -> Result<bool> {
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
-    let value_name: Vec<u16> = "Codex Minibar"
+    let value_name: Vec<u16> = "Codex Minibar Pace"
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
@@ -3010,7 +3118,7 @@ fn apply_startup_registration(enabled: bool) -> Result<()> {
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
-    let value_name: Vec<u16> = "Codex Minibar"
+    let value_name: Vec<u16> = "Codex Minibar Pace"
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
@@ -4696,5 +4804,92 @@ enabled = ["codex"]
         assert_eq!(loaded.version, SETTINGS_VERSION);
         assert!(loaded.onboarding_completed);
         assert!(path.with_extension("toml.corrupt").exists());
+    }
+}
+
+#[cfg(test)]
+mod weekly_pace_tests {
+    use super::*;
+    #[test]
+    fn fresh_install_enables_schedule_and_weekly_widget() {
+        let s = Settings::default();
+        assert!(s.weekly_work_schedule.enabled);
+        assert_eq!(s.taskbar.widgets[0].style, TaskbarWidgetStyle::WeeklyPace);
+        assert_eq!(s.taskbar.widgets[0].indicators[0].metric_id, "codex.weekly");
+    }
+    #[test]
+    fn existing_settings_without_schedule_keep_calendar_pacing() {
+        let mut value = toml::Value::try_from(Settings::default()).unwrap();
+        value.as_table_mut().unwrap().remove("weekly_work_schedule");
+        let (s, _) = Settings::decode_raw(&toml::to_string(&value).unwrap()).unwrap();
+        assert!(!s.weekly_work_schedule.enabled);
+    }
+    #[test]
+    fn schedule_and_widget_round_trip_without_changing_values() {
+        let mut s = Settings::default();
+        s.weekly_work_schedule.weekdays = vec![0, 2, 4];
+        s.weekly_work_schedule.start_minutes = 510;
+        let (decoded, _) = Settings::decode_raw(&toml::to_string(&s).unwrap()).unwrap();
+        assert_eq!(s.weekly_work_schedule, decoded.weekly_work_schedule);
+        assert_eq!(s.taskbar, decoded.taskbar);
+    }
+}
+
+#[cfg(test)]
+mod claude_pace_tests {
+    use super::*;
+    #[test]
+    fn upgrade_enables_rotation_without_changing_existing_layout() {
+        let mut s = Settings::default();
+        let original = s.taskbar.widgets.clone();
+        let mut value = toml::Value::try_from(&s).unwrap();
+        value
+            .get_mut("taskbar")
+            .unwrap()
+            .as_table_mut()
+            .unwrap()
+            .remove("rotate_weekly");
+        let (decoded, _) = Settings::decode_raw(&toml::to_string(&value).unwrap()).unwrap();
+        assert!(decoded.taskbar.rotate_weekly);
+        assert_eq!(decoded.taskbar.widgets, original);
+        assert!(!s.enable_discovered_claude(false));
+        assert!(!s.taskbar.claude_detection_done);
+        assert!(s.enable_discovered_claude(true));
+        let claude = s
+            .instances
+            .iter_mut()
+            .find(|i| i.driver == ProviderKind::Claude && i.enabled)
+            .unwrap();
+        claude.enabled = false;
+        assert!(!s.enable_discovered_claude(true));
+        assert!(
+            !s.instances
+                .iter()
+                .any(|i| i.driver == ProviderKind::Claude && i.enabled)
+        );
+        assert_eq!(s.taskbar.widgets, original);
+    }
+    #[test]
+    fn claude_widget_normalization_preserves_its_provider_and_metric() {
+        let provider = ProviderId::primary(ProviderKind::Claude);
+        let mut widget = TaskbarWidget::weekly_pace(provider);
+        assert!(!widget.normalize());
+        assert_eq!(widget.provider(), Some(provider));
+        assert_eq!(widget.indicators[0].metric_id, "claude.weekly");
+    }
+    #[test]
+    fn discovery_preserves_an_existing_claude_account() {
+        let mut s = Settings::default();
+        s.instances.retain(|i| i.driver != ProviderKind::Claude);
+        let account = ProviderInstance::new(ProviderKind::Claude, "Work");
+        s.instances.push(account.clone());
+        assert!(s.enable_discovered_claude(true));
+        assert_eq!(
+            s.instances
+                .iter()
+                .filter(|i| i.driver == ProviderKind::Claude)
+                .collect::<Vec<_>>(),
+            vec![&account]
+        );
     }
 }

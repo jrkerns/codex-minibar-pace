@@ -114,6 +114,17 @@ pub(crate) struct WidgetView {
     pub(crate) show_pace: bool,
     /// The hover card: each provider the widget reads, in full.
     pub(crate) card: Vec<CardSection>,
+    pub(crate) weekly_pace: Option<WeeklyPaceView>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WeeklyPaceView {
+    pub(crate) value: String,
+    pub(crate) remaining: String,
+    pub(crate) countdown: Option<String>,
+    pub(crate) color: Rgb,
+    pub(crate) secondary: bool,
+    pub(crate) bar_width: f32,
 }
 
 /// One provider in the hover card: every quota it reports, not only the
@@ -127,6 +138,7 @@ pub(crate) struct CardSection {
     /// Today's tokens and their API value, or spend for pay-as-you-go
     /// providers; `None` without usage statistics.
     pub(crate) today: Option<String>,
+    pub(crate) details: Vec<String>,
 }
 
 impl WidgetView {
@@ -141,6 +153,24 @@ impl WidgetView {
     /// graphic.
     pub(crate) fn compacted(&self, level: u8) -> Self {
         let mut view = self.clone();
+        if let Some(pace) = &mut view.weekly_pace {
+            if level >= 1 {
+                pace.countdown = None;
+            }
+            pace.bar_width = match level {
+                0 => 112.0,
+                1 => 72.0,
+                2 => 36.0,
+                _ => 0.0,
+            };
+            if level >= 3 {
+                pace.secondary = false;
+            }
+            if level >= 4 {
+                view.icon = None;
+            }
+            return view;
+        }
         let graphic = view.style.has_graphic();
         if level >= 1 {
             for row in &mut view.rows {
@@ -270,10 +300,26 @@ fn resolve_row(
         }
         _ => full_label.clone(),
     };
+    let is_weekly = indicator.metric_id == crate::settings::weekly_metric(provider)
+        && metric
+            .as_ref()
+            .is_some_and(|metric| metric.resolved_id == crate::settings::weekly_metric(provider));
     let window = metric.map(|metric| metric.window).unwrap_or_default();
-    let pace = window
-        .pace_tip(indicator.limit_value == LimitValue::Used, now)
-        .map(|tip| (tip.percent / 100.0) as f32);
+    let snapshot = limits.get(provider);
+    let pace = crate::pace::tip(
+        provider,
+        is_weekly,
+        &window,
+        indicator.limit_value == LimitValue::Used,
+        now,
+    )
+    .filter(|_| {
+        !crate::pace::supports(provider.kind())
+            || indicator.metric_id != crate::settings::weekly_metric(provider)
+            || !crate::pace::current().enabled
+            || crate::pace::is_fresh(provider, snapshot.sampled_at, now)
+    })
+    .map(|tip| (tip.percent / 100.0) as f32);
     let remaining = window.remaining_percent();
     let displayed = match indicator.limit_value {
         LimitValue::Remaining => remaining,
@@ -308,12 +354,25 @@ pub(crate) fn resolve(
     } else {
         TaskbarResetDisplay::Off
     };
+    let mut normalized = widget.clone();
+    normalized.normalize();
+    let widget = &normalized;
     let mut rows = widget
         .indicators
         .iter()
         .take(style.max_indicators())
         .filter_map(|indicator| resolve_row(indicator, limits, appearance, now))
         .collect::<Vec<_>>();
+    if style == TaskbarWidgetStyle::WeeklyPace
+        && let Some(provider) = widget.provider()
+    {
+        rows = vec![raw_weekly_row(
+            provider,
+            limits.get(provider),
+            appearance,
+            now,
+        )];
+    }
     for row in &mut rows {
         row.reset = row
             .resets_at
@@ -342,6 +401,19 @@ pub(crate) fn resolve(
             || (!style.has_graphic() && reset == TaskbarResetDisplay::Off),
         show_pace: widget.show_pace,
         card: card_sections(widget, limits, appearance, now),
+        weekly_pace: (style == TaskbarWidgetStyle::WeeklyPace).then(|| {
+            let provider = widget
+                .provider()
+                .unwrap_or_else(|| ProviderId::primary(crate::settings::ProviderKind::Codex));
+            weekly_pace_view(
+                provider,
+                limits.get(provider),
+                &crate::pace::current(),
+                appearance,
+                now,
+            )
+            .0
+        }),
     }
 }
 
@@ -373,7 +445,7 @@ fn card_sections(
             // A metric without data of its own can resolve to another one
             // (a reserve falling back to the session); list each quota once.
             let mut seen = Vec::new();
-            let rows = crate::widget_data::snapshot(provider, limits)
+            let mut rows = crate::widget_data::snapshot(provider, limits)
                 .metrics
                 .into_iter()
                 .filter(|metric| {
@@ -401,6 +473,9 @@ fn card_sections(
                 })
                 .collect();
             let provider_limits = limits.get(provider);
+            if widget.style == TaskbarWidgetStyle::WeeklyPace {
+                rows = vec![raw_weekly_row(provider, provider_limits, appearance, now)];
+            }
             CardSection {
                 provider,
                 icon: icon_for(provider, appearance),
@@ -411,9 +486,164 @@ fn card_sections(
                     .map(crate::popup_window::capitalize_plan_name),
                 rows,
                 today: today_usage(provider, &provider_limits.usage),
+                details: if crate::pace::supports(provider.kind())
+                    && (crate::pace::current().enabled
+                        || widget.style == TaskbarWidgetStyle::WeeklyPace)
+                {
+                    weekly_pace_view(
+                        provider,
+                        provider_limits,
+                        &crate::pace::current(),
+                        appearance,
+                        now,
+                    )
+                    .1
+                } else {
+                    Vec::new()
+                },
             }
         })
         .collect()
+}
+
+fn raw_weekly_row(
+    provider: ProviderId,
+    snapshot: &crate::limits::RateLimits,
+    appearance: Appearance,
+    now: DateTime<Utc>,
+) -> Row {
+    let empty = crate::limits::LimitWindow::default();
+    let window = if snapshot.is_free_plan() {
+        &empty
+    } else {
+        &snapshot.secondary
+    };
+    let remaining = window.remaining_percent();
+    let tip = crate::pace::tip(provider, true, window, false, now)
+        .filter(|_| crate::pace::is_fresh(provider, snapshot.sampled_at, now));
+    Row {
+        provider,
+        label: "WEEK".into(),
+        full_label: "Weekly allowance".into(),
+        value: remaining.map_or_else(|| "—".into(), |value| format!("{value}%")),
+        progress: remaining.map(|value| f32::from(value) / 100.0),
+        pace: tip.map(|tip| (tip.percent / 100.0) as f32),
+        color: appearance.status(remaining),
+        tinted: remaining.is_some(),
+        resets_at: window.resets_at,
+        icon: icon_for(provider, appearance),
+        limit_value: LimitValue::Remaining,
+        reset: None,
+    }
+}
+
+/// Shared widget/hover data. Never resolves the weekly source through a reserve fallback.
+fn weekly_pace_view(
+    provider: ProviderId,
+    snapshot: &crate::limits::RateLimits,
+    schedule: &crate::pace::WorkSchedule,
+    appearance: Appearance,
+    now: DateTime<Utc>,
+) -> (WeeklyPaceView, Vec<String>) {
+    let empty = crate::limits::LimitWindow::default();
+    let window = if snapshot.is_free_plan() {
+        &empty
+    } else {
+        &snapshot.secondary
+    };
+    let fresh = crate::pace::is_fresh(provider, snapshot.sampled_at, now);
+    let expected = if schedule.enabled {
+        crate::pace::expected(schedule, window, now, &Local)
+    } else {
+        window
+            .expected_used_percent(now)
+            .ok_or("Quota timing unavailable or reset passed")
+    };
+    let reserve = if !fresh {
+        Err("Stale data; awaiting a successful refresh")
+    } else {
+        expected.and_then(|expected| {
+            window
+                .used_percent
+                .map(|used| expected - f64::from(used.min(100)))
+                .ok_or("Usage unavailable")
+        })
+    };
+    let mut details = vec![if schedule.enabled {
+        schedule.summary()
+    } else {
+        "Calendar pacing · all hours".into()
+    }];
+    match reserve {
+        Ok(value) => {
+            details.push(format!(
+                "Pace: {value:+.1} percentage points {}",
+                if value < 0.0 {
+                    "(deficit)"
+                } else {
+                    "(in reserve)"
+                }
+            ));
+            details.push(format!(
+                "Used: {}% · Expected: {:.1}%",
+                window.used_percent.unwrap_or(0),
+                expected.unwrap_or(0.0)
+            ));
+        }
+        Err(reason) => details.push(reason.into()),
+    }
+    if let Some(reset) = window.resets_at {
+        details.push(format!(
+            "Reset: {}",
+            reset.with_timezone(&Local).format("%a %b %d %H:%M")
+        ));
+    }
+    if snapshot.sampled_at.timestamp() > 0 {
+        details.push(format!(
+            "Updated: {}{}",
+            snapshot
+                .sampled_at
+                .with_timezone(&Local)
+                .format("%a %H:%M:%S"),
+            if fresh { "" } else { " · stale" }
+        ));
+    } else {
+        details.push("Awaiting quota data".into());
+    }
+    let color = match reserve {
+        Ok(value) if value > 2.0 => {
+            if appearance.light {
+                [15, 123, 15]
+            } else {
+                [108, 203, 95]
+            }
+        }
+        Ok(value) if value < -2.0 => {
+            if appearance.light {
+                [157, 93, 0]
+            } else {
+                [252, 225, 0]
+            }
+        }
+        _ => appearance.text(),
+    };
+    (
+        WeeklyPaceView {
+            value: reserve.map_or_else(|_| "—".into(), crate::pace::signed),
+            remaining: window.remaining_percent().map_or_else(
+                || "—".into(),
+                |value| format!("{value}% left{}", if fresh { "" } else { " *" }),
+            ),
+            countdown: window
+                .resets_at
+                .filter(|reset| *reset > now)
+                .map(|reset| countdown(reset, now)),
+            color,
+            secondary: true,
+            bar_width: 112.0,
+        },
+        details,
+    )
 }
 
 /// `1.2M tokens · ≈ $3.40`, or `$1.23 · 45 requests` for providers billed
@@ -697,5 +927,252 @@ mod tests {
             countdown(now + chrono::Duration::minutes(3 * 1440 + 240), now),
             "3d 4h"
         );
+    }
+    #[test]
+    fn compaction_always_preserves_the_signed_pace() {
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        let widget = TaskbarWidget::weekly_pace(codex);
+        let mut view = resolve(&widget, &limits(30, 40), appearance(false));
+        view.weekly_pace.as_mut().unwrap().value = "+10".into();
+        for level in 0..=COMPACT_LEVELS {
+            let compact = view.compacted(level);
+            assert_eq!(compact.style, TaskbarWidgetStyle::WeeklyPace);
+            assert_eq!(compact.weekly_pace.as_ref().unwrap().value, "+10");
+            if level >= 1 {
+                assert!(compact.weekly_pace.as_ref().unwrap().countdown.is_none());
+            }
+            if level >= 3 {
+                assert!(!compact.weekly_pace.as_ref().unwrap().secondary);
+            }
+            assert!(compact.weekly_pace.as_ref().unwrap().bar_width <= 112.0);
+        }
+    }
+    #[test]
+    fn weekly_widget_uses_raw_weekly_even_when_exhausted_with_reserve() {
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        let mut data = limits(0, 100);
+        data.get_mut(codex).sampled_at = Utc::now();
+        let weekly_window = data.get(codex).secondary.clone();
+        data.get_mut(codex)
+            .additional_limits
+            .push(crate::limits::AdditionalLimit {
+                id: crate::limits::GPT_RESERVE_LIMIT_ID.into(),
+                title: "Reserve".into(),
+                window: LimitWindow {
+                    used_percent: Some(0),
+                    ..weekly_window
+                },
+            });
+        let widget = TaskbarWidget::weekly_pace(codex);
+        let view = resolve(&widget, &data, appearance(false));
+        assert_eq!(view.weekly_pace.as_ref().unwrap().remaining, "0% left");
+    }
+    #[test]
+    fn stale_weekly_widget_hides_pace_and_labels_its_remaining_sample() {
+        let codex = ProviderId::primary(ProviderKind::Codex);
+        let mut data = limits(0, 30);
+        data.get_mut(codex).sampled_at = Utc::now() - chrono::Duration::days(1);
+        let view = resolve(&TaskbarWidget::weekly_pace(codex), &data, appearance(false));
+        assert_eq!(view.weekly_pace.as_ref().unwrap().value, "—");
+        assert!(view.weekly_pace.as_ref().unwrap().remaining.contains('*'));
+        assert!(
+            view.card[0]
+                .details
+                .iter()
+                .any(|line| line.contains("Stale"))
+        );
+    }
+}
+
+/// Keep the configured widget identity (including its settings action), replacing
+/// all provider-dependent content together before resolving the view.
+pub(crate) fn rotated_widgets(
+    widgets: &[TaskbarWidget],
+    enabled: &[ProviderId],
+    turn: usize,
+) -> Vec<TaskbarWidget> {
+    widgets
+        .iter()
+        .cloned()
+        .map(|mut widget| {
+            if widget.style != TaskbarWidgetStyle::WeeklyPace {
+                return widget;
+            }
+            let preferred = widget.provider().filter(|p| enabled.contains(p));
+            let first = preferred.or_else(|| {
+                enabled
+                    .iter()
+                    .copied()
+                    .find(|p| crate::pace::supports(p.kind()))
+            });
+            if let Some(first) = first {
+                let other = enabled
+                    .iter()
+                    .copied()
+                    .find(|p| crate::pace::supports(p.kind()) && p.kind() != first.kind());
+                let provider = if turn % 2 == 1 {
+                    other.unwrap_or(first)
+                } else {
+                    first
+                };
+                widget.indicators = vec![TrayIndicator::new(
+                    provider,
+                    crate::settings::weekly_metric(provider),
+                )];
+            }
+            widget
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod rotation_tests {
+    use super::*;
+    use crate::settings::ProviderKind;
+    #[test]
+    fn every_provider_combination_rotates_only_supported_weekly_widgets() {
+        let c = ProviderId::primary(ProviderKind::Codex);
+        let a = ProviderId::primary(ProviderKind::Claude);
+        let other = ProviderId::primary(ProviderKind::Cursor);
+        let weekly = TaskbarWidget::weekly_pace(c);
+        let ordinary = TaskbarWidget::for_provider(other);
+        for enabled in [
+            vec![],
+            vec![c],
+            vec![a],
+            vec![c, a],
+            vec![a, c],
+            vec![c, a, other],
+            vec![other],
+        ] {
+            for turn in 0..4 {
+                let widgets = rotated_widgets(&[weekly.clone(), ordinary.clone()], &enabled, turn);
+                assert_eq!(widgets[0].id, weekly.id);
+                assert_eq!(widgets[1], ordinary);
+                let views = resolve_visible(
+                    &widgets,
+                    &enabled,
+                    &ProviderLimits::default(),
+                    Appearance {
+                        light: true,
+                        colored_icons: true,
+                        accent: [0, 120, 212],
+                    },
+                );
+                if let Some(view) = views
+                    .iter()
+                    .find(|v| v.style == TaskbarWidgetStyle::WeeklyPace)
+                {
+                    let expected =
+                        if enabled.contains(&c) && (turn % 2 == 0 || !enabled.contains(&a)) {
+                            c
+                        } else {
+                            a
+                        };
+                    assert_eq!(view.provider, Some(expected));
+                    assert_eq!(view.rows[0].provider, expected);
+                    assert_eq!(view.card[0].provider, expected);
+                    assert_eq!(view.weekly_pace.as_ref().unwrap().value, "—");
+                    assert_eq!(
+                        view.icon.as_ref(),
+                        Some(&icon_for(
+                            expected,
+                            Appearance {
+                                light: true,
+                                colored_icons: true,
+                                accent: [0, 120, 212]
+                            }
+                        ))
+                    );
+                } else {
+                    assert!(!enabled.contains(&c) && !enabled.contains(&a));
+                }
+            }
+        }
+    }
+    #[test]
+    fn rotation_resolves_each_providers_own_quota_and_reset() {
+        let c = ProviderId::primary(ProviderKind::Codex);
+        let a = ProviderId::primary(ProviderKind::Claude);
+        let now = Utc::now();
+        let mut limits = ProviderLimits::default();
+        for (provider, used, days) in [(c, 20, 2), (a, 60, 4)] {
+            let snapshot = limits.get_mut(provider);
+            snapshot.sampled_at = now;
+            snapshot.secondary = crate::limits::LimitWindow {
+                used_percent: Some(used),
+                duration_minutes: Some(10080),
+                resets_at: Some(now + chrono::Duration::days(days)),
+            };
+        }
+        let widget = TaskbarWidget::weekly_pace(c);
+        for (turn, provider, remaining) in [(0, c, "80%"), (1, a, "40%"), (2, c, "80%")] {
+            let widgets = rotated_widgets(std::slice::from_ref(&widget), &[c, a], turn);
+            let view = resolve(
+                &widgets[0],
+                &limits,
+                Appearance {
+                    light: true,
+                    colored_icons: true,
+                    accent: [0, 120, 212],
+                },
+            );
+            assert_eq!(view.rows[0].value, remaining);
+            assert_eq!(
+                view.rows[0].resets_at,
+                limits.get(provider).secondary.resets_at
+            );
+            assert_ne!(view.weekly_pace.as_ref().unwrap().value, "—");
+            assert!(!view.card[0].details.is_empty());
+        }
+    }
+}
+
+/// A monotonic clock: quota refreshes and wall-clock changes never restart a turn.
+#[cfg(any(windows, test))]
+pub(crate) struct WeeklyRotation {
+    pub(crate) turn: usize,
+    since: std::time::Instant,
+}
+#[cfg(any(windows, test))]
+impl WeeklyRotation {
+    pub(crate) fn new(now: std::time::Instant) -> Self {
+        Self {
+            turn: 0,
+            since: now,
+        }
+    }
+    pub(crate) fn tick(&mut self, now: std::time::Instant, enabled: bool, paused: bool) -> bool {
+        if !enabled || paused {
+            self.since = now;
+            return false;
+        }
+        if now.duration_since(self.since) < std::time::Duration::from_secs(5) {
+            return false;
+        }
+        self.turn = self.turn.wrapping_add(1);
+        self.since = now;
+        true
+    }
+}
+#[cfg(test)]
+mod rotation_clock_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+    #[test]
+    fn rotation_waits_five_seconds_and_restarts_after_interaction() {
+        let start = Instant::now();
+        let mut clock = WeeklyRotation::new(start);
+        assert!(!clock.tick(start + Duration::from_millis(4999), true, false));
+        assert!(clock.tick(start + Duration::from_secs(5), true, false));
+        assert_eq!(clock.turn, 1);
+        assert!(!clock.tick(start + Duration::from_secs(10), true, true));
+        assert!(!clock.tick(start + Duration::from_secs(14), true, false));
+        assert!(clock.tick(start + Duration::from_secs(15), true, false));
+        assert_eq!(clock.turn, 2);
+        assert!(!clock.tick(start + Duration::from_secs(60), false, false));
+        assert!(!clock.tick(start + Duration::from_secs(64), true, false));
+        assert!(clock.tick(start + Duration::from_secs(65), true, false));
+        assert_eq!(clock.turn, 3);
     }
 }

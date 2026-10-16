@@ -1,4 +1,4 @@
-# Codex Minibar — pt-BR
+# Codex Minibar Pace — pt-BR
 # Full Fluent catalog; parameters and technical names remain unchanged.
 
 luna-reserve = Reserva Luna
@@ -659,7 +659,7 @@ msg-60-minutes = 60 minutos
 
 start-with-windows = Iniciar com o Windows
 
-open-codex-minibar-in-the-tray-when-you-sign-in = Abrir o Codex Minibar na bandeja ao entrar no Windows.
+open-codex-minibar-in-the-tray-when-you-sign-in = Abrir o Codex Minibar Pace na bandeja ao entrar no Windows.
 
 refresh-interval = Intervalo de atualização
 
@@ -1319,7 +1319,7 @@ app-icon = Ícone do aplicativo
 
 widget = Widget { $v0 }
 
-the-codex-minibar-icon = O ícone do Codex Minibar
+the-codex-minibar-icon = O ícone do Codex Minibar Pace
 
 style-no-indicators = { $style } · Sem indicadores
 
@@ -1343,7 +1343,7 @@ edit = Editar
 
 duplicate = Duplicar
 
-shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Mostra o ícone do Codex Minibar na área de notificação. Não há indicadores para configurar.
+shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Mostra o ícone do Codex Minibar Pace na área de notificação. Não há indicadores para configurar.
 
 style = Estilo
 
@@ -1407,9 +1407,9 @@ english = English
 
 msg-russian = Русский
 
-codex-minibar-settings = Configurações do Codex Minibar
+codex-minibar-settings = Configurações do Codex Minibar Pace
 
-welcome-to-codex-minibar = Bem-vindo ao Codex Minibar
+welcome-to-codex-minibar = Bem-vindo ao Codex Minibar Pace
 
 exit = Sair
 
@@ -1722,7 +1722,7 @@ update-installing = Instalando atualização
 update-unpacking = Descompactando arquivos…
 
 # src/updater.rs
-update-restarting = Reiniciando o Codex Minibar
+update-restarting = Reiniciando o Codex Minibar Pace
 
 # src/updater.rs
 update-restarting-body = O app será reaberto em instantes.
@@ -1822,7 +1822,7 @@ taskbar-style-glance = Resumo
 taskbar-style-glance-hint = O ícone do provedor ao lado de duas linhas de texto, como o botão do clima.
 taskbar-style-rings-hint = Um anel de progresso por cota, com o valor ao lado.
 taskbar-style-bars-hint = Barras de progresso finas ao lado do ícone do provedor.
-taskbar-menu-open = Abrir o Codex Minibar
+taskbar-menu-open = Abrir o Codex Minibar Pace
 taskbar-menu-settings = Configurações dos widgets da barra de tarefas
 taskbar-menu-hide = Ocultar os widgets da barra de tarefas
 taskbar-card-left = Restam { $value }
@@ -1983,3 +1983,6 @@ cmdpal-content-hint = O Dock mostra uma faixa como um título acima de um subtí
 
 # src/settings_window/command_palette.rs
 cmdpal-indicators-hint = Até 2 cotas: uma preenche o título e o subtítulo; duas ocupam uma linha cada.
+
+weekly-pace-style = Weekly pace
+weekly-pace-style-hint = Signed weekly headroom over scheduled working hours.

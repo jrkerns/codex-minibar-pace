@@ -2166,7 +2166,7 @@ fn truncate_local_hour(timestamp: DateTime<Local>) -> DateTime<Local> {
 }
 
 fn config_dir() -> Result<PathBuf> {
-    ProjectDirs::from("dev", "Codex Minibar", "Codex Minibar")
+    ProjectDirs::from("dev", "Codex Minibar Pace", "Codex Minibar Pace")
         .map(|dirs| dirs.config_dir().to_path_buf())
         .context("could not resolve the application config directory")
 }

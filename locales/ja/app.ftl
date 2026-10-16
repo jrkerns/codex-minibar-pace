@@ -1,4 +1,4 @@
-### Codex Minibar application messages.
+### Codex Minibar Pace application messages.
 ### Japanese translation; per-message English fallback. Keep $parameters unchanged.
 
 # src/provider_registry.rs
@@ -959,7 +959,7 @@ msg-60-minutes = 60分
 start-with-windows = Windows と同時に起動
 
 # src/settings_window/general.rs
-open-codex-minibar-in-the-tray-when-you-sign-in = サインイン時にトレイで Codex Minibar を開きます。
+open-codex-minibar-in-the-tray-when-you-sign-in = サインイン時にトレイで Codex Minibar Pace を開きます。
 
 # src/settings_window/onboarding.rs
 refresh-interval = リフレッシュ間隔
@@ -1945,7 +1945,7 @@ app-icon = アプリアイコン
 widget = ウィジェット { $v0 }
 
 # src/settings_window/tray.rs
-the-codex-minibar-icon = Codex Minibar アイコン
+the-codex-minibar-icon = Codex Minibar Pace アイコン
 
 # src/settings_window/tray.rs
 style-no-indicators = { $style } · インジケーターなし
@@ -1981,7 +1981,7 @@ edit = 編集
 duplicate = 複製
 
 # src/settings_window/tray.rs
-shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = 通知領域に Codex Minibar アイコンを表示します。設定するインジケーターはありません。
+shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = 通知領域に Codex Minibar Pace アイコンを表示します。設定するインジケーターはありません。
 
 # src/settings_window/tray.rs
 style = スタイル
@@ -2077,10 +2077,10 @@ english = 英語
 msg-russian = Русский
 
 # application
-codex-minibar-settings = Codex Minibar の設定
+codex-minibar-settings = Codex Minibar Pace の設定
 
 # application
-welcome-to-codex-minibar = Codex Minibar へようこそ
+welcome-to-codex-minibar = Codex Minibar Pace へようこそ
 
 # application
 exit = 終了
@@ -2591,7 +2591,7 @@ update-installing = アップデートをインストール中
 update-unpacking = ファイルを展開しています…
 
 # src/updater.rs
-update-restarting = Codex Minibar を再起動しています
+update-restarting = Codex Minibar Pace を再起動しています
 
 # src/updater.rs
 update-restarting-body = まもなくアプリが再び開きます。
@@ -2691,7 +2691,7 @@ taskbar-style-glance = ひと目
 taskbar-style-glance-hint = 天気ボタンのように、プロバイダーのアイコンと 2 行のテキストを表示します。
 taskbar-style-rings-hint = 利用枠ごとのプログレス リングと、その横の値を表示します。
 taskbar-style-bars-hint = プロバイダーのアイコンの横に細いプログレス バーを重ねて表示します。
-taskbar-menu-open = Codex Minibar を開く
+taskbar-menu-open = Codex Minibar Pace を開く
 taskbar-menu-settings = タスク バー ウィジェットの設定
 taskbar-menu-hide = タスク バー ウィジェットを非表示
 taskbar-card-left = 残り { $value }
@@ -2852,3 +2852,6 @@ cmdpal-content-hint = Dock はバンドをタイトルとサブタイトルの 2
 
 # src/settings_window/command_palette.rs
 cmdpal-indicators-hint = 最大 2 つのクォータ：1 つならタイトルとサブタイトルを使い、2 つなら 1 行ずつ表示します。
+
+weekly-pace-style = Weekly pace
+weekly-pace-style-hint = Signed weekly headroom over scheduled working hours.

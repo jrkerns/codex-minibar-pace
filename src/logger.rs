@@ -34,7 +34,7 @@ pub fn initialize(settings_path: &Path) -> Result<PathBuf> {
         .open(&path)
         .with_context(|| format!("open {}", path.display()))?;
     let _ = LOG_PATH.set(path.clone());
-    info("Codex Minibar started");
+    info("Codex Minibar Pace started");
     info(format!("Log file: {}", path.display()));
     Ok(path)
 }
@@ -166,7 +166,7 @@ mod tests {
         assert!(
             fs::read_to_string(&log)
                 .unwrap()
-                .contains("Codex Minibar started")
+                .contains("Codex Minibar Pace started")
         );
         // A subsequent launch still archives its predecessor and preserves settings.
         fs::write(&settings, "version = 36\n").unwrap();

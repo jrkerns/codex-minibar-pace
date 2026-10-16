@@ -392,6 +392,32 @@ impl Renderer {
         }
     }
 
+    fn pace_line(&mut self, text: &str, size: f32) -> windows::core::Result<Line> {
+        let wide = text.encode_utf16().collect::<Vec<_>>();
+        unsafe {
+            let format = self.dwrite.CreateTextFormat(
+                w!("Consolas"),
+                None,
+                DWRITE_FONT_WEIGHT_SEMI_BOLD,
+                DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL,
+                size,
+                w!(""),
+            )?;
+            format.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP).ok()?;
+            let layout = self
+                .dwrite
+                .CreateTextLayout(&wide, &format, 4096.0, 256.0)?;
+            let mut metrics = DWRITE_TEXT_METRICS::default();
+            layout.GetMetrics(&mut metrics).ok()?;
+            Ok(Line {
+                layout,
+                width: metrics.widthIncludingTrailingWhitespace,
+                height: metrics.height,
+            })
+        }
+    }
+
     fn icon_bitmap(&mut self, icon: &Icon, size: f32) -> Option<ID2D1Bitmap> {
         let pixels = (size * self.dpi / 96.0).round().max(1.0) as u32;
         let key = IconKey {
@@ -437,11 +463,16 @@ impl Renderer {
     }
 
     fn content(&mut self, view: &WidgetView, metrics: Metrics) -> windows::core::Result<Content> {
+        if view.weekly_pace.is_some() {
+            return self.weekly_pace(view, metrics);
+        }
         if metrics.vertical {
             return self.column(view, metrics);
         }
         match view.style {
-            TaskbarWidgetStyle::Glance => self.glance(view, metrics),
+            TaskbarWidgetStyle::WeeklyPace | TaskbarWidgetStyle::Glance => {
+                self.glance(view, metrics)
+            }
             TaskbarWidgetStyle::Rings => self.rings(view, metrics),
             TaskbarWidgetStyle::Bars => self.bars(view, metrics),
             TaskbarWidgetStyle::Nested => self.nested(view, metrics),
@@ -608,6 +639,97 @@ impl Renderer {
             lines.push(self.row_runs(view, row, font, Weight::Semibold)?);
         }
         Ok(Self::stack(lines, x, metrics, false, prims))
+    }
+
+    fn weekly_pace(
+        &mut self,
+        view: &WidgetView,
+        metrics: Metrics,
+    ) -> windows::core::Result<Content> {
+        let pace = view.weekly_pace.as_ref().expect("weekly pace view");
+        let mut prims = Vec::new();
+        let font = if metrics.vertical {
+            16.0
+        } else {
+            (metrics.inner() * 0.53).clamp(14.0, 21.0)
+        };
+        let mut number = self.pace_line(&pace.value, font)?;
+        // Reserve a stable numeric column, so the bar does not jump as digits change.
+        number.width = self.pace_line("+100", font)?.width;
+        let show_bar = pace.secondary && pace.bar_width > 0.0;
+        let row = view.rows.first();
+        let bar_color = if pace.value == "—" {
+            [128, 128, 128]
+        } else {
+            pace.color
+        };
+        let marker = row.and_then(|row| row.pace);
+        if metrics.vertical {
+            let mut y = PAD_VERTICAL;
+            if let Some(icon) = view.icon.clone() {
+                let size = Self::icon_size(metrics);
+                prims.push(Prim::Icon {
+                    icon,
+                    x: (metrics.thickness - size) / 2.0,
+                    y,
+                    size,
+                });
+                y += size + 6.0;
+            }
+            let height = number.height;
+            Self::place_runs(
+                vec![(number, Tone::Tint(pace.color))],
+                (metrics.thickness - self.pace_line("+100", font)?.width).max(0.0) / 2.0,
+                y,
+                height,
+                &mut prims,
+            );
+            y += height;
+            if show_bar {
+                let width = pace.bar_width.min((metrics.thickness - 16.0).max(16.0));
+                y += 10.0;
+                prims.push(Prim::Bar {
+                    x: (metrics.thickness - width) / 2.0,
+                    y,
+                    width,
+                    row: 0,
+                    color: bar_color,
+                    pace: marker,
+                });
+                y += BAR_THICKNESS / 2.0;
+            }
+            return Ok(Content {
+                length: y + PAD_VERTICAL,
+                prims,
+            });
+        }
+        let x = Self::leading_icon(view, metrics, &mut prims);
+        let number_width = number.width;
+        let number_height = number.height;
+        Self::place_runs(
+            vec![(number, Tone::Tint(pace.color))],
+            x,
+            (metrics.thickness - number_height) / 2.0,
+            number_height,
+            &mut prims,
+        );
+        let mut length = x + number_width;
+        if show_bar {
+            length += 12.0;
+            prims.push(Prim::Bar {
+                x: length,
+                y: metrics.thickness / 2.0,
+                width: pace.bar_width,
+                row: 0,
+                color: bar_color,
+                pace: marker,
+            });
+            length += pace.bar_width;
+        }
+        Ok(Content {
+            length: length + PAD_END,
+            prims,
+        })
     }
 
     fn glance(&mut self, view: &WidgetView, metrics: Metrics) -> windows::core::Result<Content> {
@@ -1147,7 +1269,7 @@ impl Renderer {
                     y += BAR_THICKNESS + 6.0;
                 }
             }
-            TaskbarWidgetStyle::Glance => {}
+            TaskbarWidgetStyle::WeeklyPace | TaskbarWidgetStyle::Glance => {}
         }
         if values {
             for row in &view.rows {
@@ -1799,6 +1921,40 @@ impl Renderer {
                     y += height;
                 }
             }
+            for detail in &section.details {
+                let mut current = String::new();
+                let mut lines = Vec::new();
+                for word in detail.split_whitespace() {
+                    let candidate = if current.is_empty() {
+                        word.to_owned()
+                    } else {
+                        format!("{current} {word}")
+                    };
+                    if !current.is_empty()
+                        && self.line(&candidate, 11.0, Weight::Regular)?.width > inner
+                    {
+                        lines.push(std::mem::take(&mut current));
+                    }
+                    if !current.is_empty() {
+                        current.push(' ');
+                    }
+                    current.push_str(word);
+                }
+                if !current.is_empty() {
+                    lines.push(current);
+                }
+                for line in lines {
+                    let text = self.line(&line, 11.0, Weight::Regular)?;
+                    let height = text.height;
+                    prims.push(Prim::Text {
+                        layout: text.layout,
+                        x: CARD_PAD,
+                        y,
+                        tone: Tone::Secondary,
+                    });
+                    y += height + 3.0;
+                }
+            }
             if let Some(today) = &section.today {
                 y += 12.0;
                 let label = self.line(crate::i18n::tr("today"), 12.0, Weight::Regular)?;
@@ -2093,5 +2249,87 @@ pub(crate) fn snapshot(
             height: height as u32,
             rgba,
         })
+    }
+}
+
+#[cfg(test)]
+mod weekly_pace_render_tests {
+    use super::*;
+    use crate::{
+        instances::ProviderId,
+        limits::ProviderLimits,
+        settings::{ProviderKind, TaskbarWidget},
+    };
+    #[test]
+    fn signed_values_stay_inside_fixed_columns_at_every_compaction_level() {
+        let appearance = Appearance {
+            light: false,
+            colored_icons: true,
+            accent: [0, 120, 212],
+        };
+        let widget = TaskbarWidget::weekly_pace(ProviderId::primary(ProviderKind::Codex));
+        let mut view =
+            super::super::model::resolve(&widget, &ProviderLimits::default(), appearance);
+        let mut renderer = Renderer::new().unwrap();
+        view.rows[0].progress = Some(0.5);
+        view.rows[0].pace = Some(0.43);
+        for value in ["+100", "-100", "+10", "-10", "0", "—"] {
+            view.weekly_pace.as_mut().unwrap().value = value.into();
+            view.weekly_pace.as_mut().unwrap().remaining = "100% left *".into();
+            for height in [40.0, 48.0, 64.0] {
+                for level in 0..=super::super::model::COMPACT_LEVELS {
+                    let compact = view.compacted(level);
+                    let metrics = Metrics {
+                        scale: 1.0,
+                        thickness: height,
+                        vertical: false,
+                    };
+                    let content = renderer.content(&compact, metrics).unwrap();
+                    assert_eq!(
+                        content
+                            .prims
+                            .iter()
+                            .filter(|prim| matches!(prim, Prim::Text { .. }))
+                            .count(),
+                        1,
+                        "the widget shows only the signed number, with no captions"
+                    );
+                    assert_eq!(
+                        content
+                            .prims
+                            .iter()
+                            .filter(|prim| matches!(prim, Prim::Bar { .. }))
+                            .count(),
+                        usize::from(level < 3),
+                        "the bar shrinks before it is hidden"
+                    );
+                    for primitive in &content.prims {
+                        if let Prim::Bar { pace, .. } = primitive {
+                            assert_eq!(
+                                *pace,
+                                Some(0.43),
+                                "marker represents expected remaining quota"
+                            );
+                        }
+                        if let Prim::Text { layout, x, y, .. } = primitive {
+                            let mut measured = DWRITE_TEXT_METRICS::default();
+                            unsafe {
+                                layout.GetMetrics(&mut measured).ok().unwrap();
+                            }
+                            assert!(*x >= 0.0 && *y >= 0.0, "negative text origin: {value}");
+                            assert!(
+                                *x + measured.widthIncludingTrailingWhitespace
+                                    <= content.length + 0.5,
+                                "text exceeds width: {value}"
+                            );
+                            assert!(
+                                *y + measured.height <= height + 0.5,
+                                "text exceeds height: {value}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -1408,7 +1408,7 @@ msg-60-minutes = { "" }
 start-with-windows = { "" }
 
 # English source:
-# open-codex-minibar-in-the-tray-when-you-sign-in = Open Codex Minibar in the tray when you sign in.
+# open-codex-minibar-in-the-tray-when-you-sign-in = Open Codex Minibar Pace in the tray when you sign in.
 open-codex-minibar-in-the-tray-when-you-sign-in = { "" }
 
 # English source:
@@ -2728,7 +2728,7 @@ app-icon = { "" }
 widget = { "" }
 
 # English source:
-# the-codex-minibar-icon = The Codex Minibar icon
+# the-codex-minibar-icon = The Codex Minibar Pace icon
 the-codex-minibar-icon = { "" }
 
 # English source:
@@ -2776,7 +2776,7 @@ edit = { "" }
 duplicate = { "" }
 
 # English source:
-# shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Shows the Codex Minibar icon in the notification area. It has no indicators to set up.
+# shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Shows the Codex Minibar Pace icon in the notification area. It has no indicators to set up.
 shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = { "" }
 
 # English source:
@@ -2904,11 +2904,11 @@ english = { "" }
 msg-russian = { "" }
 
 # English source:
-# codex-minibar-settings = Codex Minibar Settings
+# codex-minibar-settings = Codex Minibar Pace Settings
 codex-minibar-settings = { "" }
 
 # English source:
-# welcome-to-codex-minibar = Welcome to Codex Minibar
+# welcome-to-codex-minibar = Welcome to Codex Minibar Pace
 welcome-to-codex-minibar = { "" }
 
 # English source:
@@ -3718,7 +3718,7 @@ update-installing = { "" }
 update-unpacking = { "" }
 
 # English source:
-# update-restarting = Restarting Codex Minibar
+# update-restarting = Restarting Codex Minibar Pace
 update-restarting = { "" }
 
 # English source:
@@ -3919,7 +3919,7 @@ taskbar-style-bars-hint = { "" }
 
 
 # English source:
-# taskbar-menu-open = Open Codex Minibar
+# taskbar-menu-open = Open Codex Minibar Pace
 taskbar-menu-open = { "" }
 
 # English source:
@@ -4234,3 +4234,6 @@ cmdpal-content-hint = { "" }
 # English source:
 # cmdpal-indicators-hint = Up to 2 quotas: one fills the title and subtitle, two take a line each.
 cmdpal-indicators-hint = { "" }
+
+weekly-pace-style = Weekly pace
+weekly-pace-style-hint = Signed weekly headroom over scheduled working hours.

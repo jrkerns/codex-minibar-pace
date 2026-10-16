@@ -1,4 +1,4 @@
-### Codex Minibar application messages.
+### Codex Minibar Pace application messages.
 ### German translation; per-message English fallback. Keep $parameters unchanged.
 
 # src/provider_registry.rs
@@ -962,7 +962,7 @@ msg-60-minutes = 60 Minuten
 start-with-windows = Mit Windows starten
 
 # src/settings_window/general.rs
-open-codex-minibar-in-the-tray-when-you-sign-in = Öffnen Sie Codex Minibar in der Taskleiste, wenn Sie sich anmelden.
+open-codex-minibar-in-the-tray-when-you-sign-in = Öffnen Sie Codex Minibar Pace in der Taskleiste, wenn Sie sich anmelden.
 
 # src/settings_window/onboarding.rs
 refresh-interval = Aktualisierungsintervall
@@ -1948,7 +1948,7 @@ app-icon = App-Symbol
 widget = Widget { $v0 }
 
 # src/settings_window/tray.rs
-the-codex-minibar-icon = Das Codex Minibar-Symbol
+the-codex-minibar-icon = Das Codex Minibar Pace-Symbol
 
 # src/settings_window/tray.rs
 style-no-indicators = { $style } · Keine Indikatoren
@@ -1984,7 +1984,7 @@ edit = Bearbeiten
 duplicate = Duplizieren
 
 # src/settings_window/tray.rs
-shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Zeigt das Codex Minibar-Symbol im Benachrichtigungsbereich an. Es müssen keine Indikatoren eingerichtet werden.
+shows-the-codex-minibar-icon-in-the-notification-area-it-has-no-i = Zeigt das Codex Minibar Pace-Symbol im Benachrichtigungsbereich an. Es müssen keine Indikatoren eingerichtet werden.
 
 # src/settings_window/tray.rs
 style = Stil
@@ -2080,10 +2080,10 @@ english = Englisch
 msg-russian = Russisch
 
 # application
-codex-minibar-settings = Codex Minibar – Einstellungen
+codex-minibar-settings = Codex Minibar Pace – Einstellungen
 
 # application
-welcome-to-codex-minibar = Willkommen bei Codex Minibar
+welcome-to-codex-minibar = Willkommen bei Codex Minibar Pace
 
 # application
 exit = Beenden
@@ -2612,7 +2612,7 @@ update-installing = Update wird installiert
 update-unpacking = Dateien werden entpackt…
 
 # src/updater.rs
-update-restarting = Codex Minibar wird neu gestartet
+update-restarting = Codex Minibar Pace wird neu gestartet
 
 # src/updater.rs
 update-restarting-body = Die App öffnet sich gleich wieder.
@@ -2712,7 +2712,7 @@ taskbar-style-glance = Überblick
 taskbar-style-glance-hint = Das Anbietersymbol neben zwei Textzeilen, wie die Wetter-Schaltfläche.
 taskbar-style-rings-hint = Ein Fortschrittsring pro Kontingent mit dem Wert daneben.
 taskbar-style-bars-hint = Schmale Fortschrittsbalken neben dem Anbietersymbol.
-taskbar-menu-open = Codex Minibar öffnen
+taskbar-menu-open = Codex Minibar Pace öffnen
 taskbar-menu-settings = Einstellungen der Taskleisten-Widgets
 taskbar-menu-hide = Taskleisten-Widgets ausblenden
 taskbar-card-left = Noch { $value }
@@ -2873,3 +2873,6 @@ cmdpal-content-hint = Das Dock zeigt ein Band als Titel über einem Untertitel.
 
 # src/settings_window/command_palette.rs
 cmdpal-indicators-hint = Bis zu 2 Kontingente: eines füllt Titel und Untertitel, zwei je eine Zeile.
+
+weekly-pace-style = Weekly pace
+weekly-pace-style-hint = Signed weekly headroom over scheduled working hours.

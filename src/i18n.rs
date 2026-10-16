@@ -650,24 +650,28 @@ mod tests {
             (
                 Language::BrazilianPortuguese,
                 "Configurações",
-                "Configurações do Codex Minibar",
+                "Configurações do Codex Minibar Pace",
             ),
             (
                 Language::Spanish,
                 "Configuración",
-                "Configuración de Codex Minibar",
+                "Configuración de Codex Minibar Pace",
             ),
-            (Language::SimplifiedChinese, "设置", "Codex Minibar 设置"),
-            (Language::Japanese, "設定", "Codex Minibar の設定"),
+            (
+                Language::SimplifiedChinese,
+                "设置",
+                "Codex Minibar Pace 设置",
+            ),
+            (Language::Japanese, "設定", "Codex Minibar Pace の設定"),
             (
                 Language::German,
                 "Einstellungen",
-                "Codex Minibar – Einstellungen",
+                "Codex Minibar Pace – Einstellungen",
             ),
             (
                 Language::French,
                 "Paramètres",
-                "Paramètres de Codex Minibar",
+                "Paramètres de Codex Minibar Pace",
             ),
         ] {
             assert_eq!(tr_in(language, "settings"), label);

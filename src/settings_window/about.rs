@@ -38,7 +38,7 @@ impl SettingsWindow {
                     .text_size(px(28.0))
                     .line_height(px(34.0))
                     .font_weight(FontWeight::BOLD)
-                    .child("Codex Minibar"),
+                    .child("Codex Minibar Pace"),
             )
             .child(
                 div()

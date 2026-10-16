@@ -276,7 +276,12 @@ pub(super) fn preview_limits() -> crate::limits::ProviderLimits {
             ProviderKind::Codex,
             crate::limits::RateLimits {
                 primary: window(38),
-                secondary: window(70),
+                secondary: crate::limits::LimitWindow {
+                    duration_minutes: Some(10_080),
+                    resets_at: Some(chrono::Utc::now() + chrono::Duration::days(3)),
+                    ..window(30)
+                },
+                sampled_at: chrono::Utc::now(),
                 ..Default::default()
             },
         ),

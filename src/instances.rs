@@ -560,7 +560,7 @@ pub fn badge_text(explicit: &str, name: &str) -> String {
 /// explicit folder.
 pub fn managed_folder(id: &str) -> anyhow::Result<PathBuf> {
     use anyhow::Context;
-    let dirs = directories::ProjectDirs::from("dev", "Codex Minibar", "Codex Minibar")
+    let dirs = directories::ProjectDirs::from("dev", "Codex Minibar Pace", "Codex Minibar Pace")
         .context("could not resolve the application data directory")?;
     Ok(dirs
         .data_local_dir()

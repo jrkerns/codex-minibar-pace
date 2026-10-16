@@ -33,6 +33,7 @@ const PLATE_PAD: f32 = 4.0;
 
 fn style_label(style: TaskbarWidgetStyle) -> &'static str {
     crate::i18n::tr(match style {
+        TaskbarWidgetStyle::WeeklyPace => "weekly-pace-style",
         TaskbarWidgetStyle::Glance => "taskbar-style-glance",
         TaskbarWidgetStyle::Rings => "rings",
         TaskbarWidgetStyle::Nested => "taskbar-style-nested",
@@ -44,6 +45,7 @@ fn style_label(style: TaskbarWidgetStyle) -> &'static str {
 
 fn style_hint(style: TaskbarWidgetStyle) -> &'static str {
     crate::i18n::tr(match style {
+        TaskbarWidgetStyle::WeeklyPace => "weekly-pace-style-hint",
         TaskbarWidgetStyle::Glance => "taskbar-style-glance-hint",
         TaskbarWidgetStyle::Rings => "taskbar-style-rings-hint",
         TaskbarWidgetStyle::Nested => "taskbar-style-nested-hint",
@@ -71,6 +73,9 @@ enum WidgetOption {
 /// What this style can show, in the order the card lists it.
 fn widget_options(widget: &TaskbarWidget) -> Vec<WidgetOption> {
     let style = widget.style;
+    if style == TaskbarWidgetStyle::WeeklyPace {
+        return Vec::new();
+    }
     let mut options = vec![WidgetOption::Toggle(WidgetToggle {
         id: "icon",
         title: "taskbar-show-provider-icon",
@@ -118,6 +123,7 @@ pub(crate) struct PreviewKey {
     accent: [u8; 3],
     scale: u32,
     minute: u64,
+    schedule: crate::pace::WorkSchedule,
 }
 
 pub(crate) type PreviewCache = HashMap<String, (PreviewKey, Arc<gpui::Image>, (f32, f32))>;
@@ -152,6 +158,128 @@ fn taskbar_plate(light: bool) -> gpui::Hsla {
 }
 
 impl SettingsWindow {
+    fn weekly_schedule_card(&mut self, k: &mut Kit, cx: &mut Context<Self>) -> AnyElement {
+        let schedule = self.settings.weekly_work_schedule.clone();
+        let format = self.settings.time_format;
+        kit::card_of(k, |k| {
+            let mut rows = vec![kit::toggle_row(
+                k,
+                "weekly-work-hours",
+                "Use working hours for weekly pace",
+                Some(
+                    "Positive pace means quota in reserve. Uses this computer's local timezone."
+                        .into(),
+                ),
+                schedule.enabled,
+                Self::h(cx, |this, enabled: bool, _, cx| {
+                    if enabled && !this.settings.weekly_work_schedule.valid() {
+                        this.show_notice(
+                            "Choose a working day and an end time after the start time.",
+                            cx,
+                        );
+                        return;
+                    }
+                    this.edit(cx, move |s| s.weekly_work_schedule.enabled = enabled);
+                }),
+            )];
+            let mut days = div()
+                .flex()
+                .flex_wrap()
+                .gap(px(10.0))
+                .px(px(18.0))
+                .py(px(12.0));
+            for (day, label) in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                .into_iter()
+                .enumerate()
+            {
+                days = days.child(kit::checkbox(
+                    k,
+                    format!("pace-weekday-{day}"),
+                    schedule.weekdays.contains(&(day as u8)),
+                    false,
+                    Some(label.into()),
+                    Self::h(cx, move |this, checked: bool, _, cx| {
+                        let mut weekdays = this.settings.weekly_work_schedule.weekdays.clone();
+                        if !super::activation::set_weekday(&mut weekdays, day as u8, checked) {
+                            if !checked {
+                                this.show_notice("Keep at least one working day selected.", cx);
+                            }
+                            return;
+                        }
+                        this.edit(cx, move |s| {
+                            s.weekly_work_schedule.weekdays = weekdays.clone()
+                        });
+                    }),
+                ));
+            }
+            rows.push(days.into_any_element());
+            rows.push(kit::toggle_row(
+                k,
+                "pace-exclude-weekends",
+                "Exclude weekends",
+                None,
+                !schedule.weekdays.contains(&5) && !schedule.weekdays.contains(&6),
+                Self::h(cx, |this, excluded: bool, _, cx| {
+                    this.edit(cx, move |s| {
+                        if excluded {
+                            s.weekly_work_schedule.weekdays.retain(|day| *day < 5);
+                            if s.weekly_work_schedule.weekdays.is_empty() {
+                                s.weekly_work_schedule.weekdays = vec![0, 1, 2, 3, 4];
+                            }
+                        } else {
+                            for day in [5, 6] {
+                                if !s.weekly_work_schedule.weekdays.contains(&day) {
+                                    s.weekly_work_schedule.weekdays.push(day);
+                                }
+                            }
+                        }
+                    })
+                }),
+            ));
+            let start = kit::time_picker(
+                k,
+                "pace-start",
+                schedule.start_minutes,
+                format,
+                Self::h(cx, |this, value: u16, _, cx| {
+                    if value >= this.settings.weekly_work_schedule.end_minutes {
+                        this.show_notice("Start time must be earlier than end time.", cx);
+                        return;
+                    }
+                    this.edit(cx, move |s| s.weekly_work_schedule.start_minutes = value);
+                }),
+            );
+            let end = kit::time_picker(
+                k,
+                "pace-end",
+                schedule.end_minutes,
+                format,
+                Self::h(cx, |this, value: u16, _, cx| {
+                    if value <= this.settings.weekly_work_schedule.start_minutes {
+                        this.show_notice("End time must be later than start time.", cx);
+                        return;
+                    }
+                    this.edit(cx, move |s| s.weekly_work_schedule.end_minutes = value);
+                }),
+            );
+            rows.push(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(20.0))
+                    .px(px(18.0))
+                    .py(px(12.0))
+                    .child(kit::field(k, "Workday starts", start))
+                    .child(kit::field(k, "Workday ends", end))
+                    .into_any_element(),
+            );
+            rows.push(div().px(px(18.0)).pb(px(12.0))
+                .child(kit::caption(k, "Weekly Codex and Claude quotas only. Schedule changes recalculate the whole quota window."))
+                .into_any_element());
+            rows
+        })
+    }
+
     /// The widgets rendered exactly as the taskbar draws them, with sample
     /// quotas, at their natural size.
     fn taskbar_preview(
@@ -182,6 +310,7 @@ impl SettingsWindow {
         let scale = window.scale_factor();
         let cache_key = PreviewKey {
             widgets: widgets.to_vec(),
+            schedule: self.settings.weekly_work_schedule.clone(),
             badges: widgets
                 .iter()
                 .flat_map(|widget| widget.indicators.iter())
@@ -340,6 +469,7 @@ impl SettingsWindow {
         let taskbar = self.settings.taskbar.clone();
         let enabled_providers = self.enabled_taskbar_providers();
         let mut rows = vec![kit::caption(k, crate::i18n::tr("taskbar-page-caption"))];
+        rows.push(self.weekly_schedule_card(k, cx));
 
         let alignment_index = match taskbar.alignment {
             TaskbarAlignment::Tray => 0,
@@ -412,6 +542,19 @@ impl SettingsWindow {
                 ),
                 kit::toggle_row(
                     k,
+                    "weekly-provider-rotation",
+                    "Rotate Codex and Claude",
+                    Some("Switch weekly pace every 5 seconds. Hover to pause. Enable accounts in Providers.".into()),
+                    taskbar.rotate_weekly,
+                    Self::h(cx, |this, value: bool, _, cx| {
+                        this.edit(cx, move |settings| {
+                            settings.taskbar.rotate_weekly = value;
+                            if value { settings.discover_weekly_claude(); }
+                        })
+                    }),
+                ),
+                kit::toggle_row(
+                    k,
                     "taskbar-cycle",
                     crate::i18n::tr("taskbar-cycle"),
                     Some(crate::i18n::tr("taskbar-cycle-description").into()),
@@ -423,8 +566,12 @@ impl SettingsWindow {
             ]
         }));
 
-        let mut visible = taskbar
-            .widgets
+        let preview_widgets = if taskbar.rotate_weekly {
+            crate::taskbar::model::rotated_widgets(&taskbar.widgets, &enabled_providers, 0)
+        } else {
+            taskbar.widgets.clone()
+        };
+        let mut visible = preview_widgets
             .iter()
             .filter(|widget| widget.is_visible_for(&self.settings.instances))
             .cloned()
@@ -717,18 +864,55 @@ impl SettingsWindow {
                 &[("max_indicators", max.to_string())],
             ),
         ));
-        let indicators = self.tray_indicators(
-            k,
-            IndicatorOwner::Taskbar,
-            index,
-            &widget.id,
-            &widget.indicators,
-            max,
-            false,
-            dialog.expanded,
-            window,
-            cx,
-        );
+        let indicators = if widget.style == TaskbarWidgetStyle::WeeklyPace {
+            let providers = self
+                .enabled_taskbar_providers()
+                .into_iter()
+                .filter(|provider| crate::pace::supports(provider.kind()))
+                .collect::<Vec<_>>();
+            let labels = providers
+                .iter()
+                .map(|provider| provider.qualified_name().into())
+                .collect();
+            let selected = providers
+                .iter()
+                .position(|provider| Some(*provider) == widget.provider())
+                .map_or(-1, |index| index as i32);
+            kit::dropdown_row(
+                k,
+                "weekly-pace-account",
+                "Provider account",
+                Some("Preferred account; rotation also shows the other enabled provider."),
+                labels,
+                selected,
+                providers.is_empty(),
+                Self::h(cx, move |this, choice: usize, _, cx| {
+                    if let Some(provider) = providers.get(choice).copied() {
+                        this.update_taskbar_widgets(cx, |widgets| {
+                            if let Some(widget) = widgets.get_mut(index) {
+                                widget.indicators = vec![TrayIndicator::new(
+                                    provider,
+                                    crate::settings::weekly_metric(provider),
+                                )];
+                            }
+                        });
+                    }
+                }),
+            )
+        } else {
+            self.tray_indicators(
+                k,
+                IndicatorOwner::Taskbar,
+                index,
+                &widget.id,
+                &widget.indicators,
+                max,
+                false,
+                dialog.expanded,
+                window,
+                cx,
+            )
+        };
         body.push(kit::appear(
             k,
             format!("taskbar-dlg-{}-{max}", widget.id),

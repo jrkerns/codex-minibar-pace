@@ -1,14 +1,18 @@
 [package]
 name = "codex-minibar"
-version = "1.2.2"
+version = "1.2.3-pace.3"
 edition = "2024"
 description = "Windows tray companion for monitoring AI tools usage"
 license = "Apache-2.0"
-repository = "https://github.com/vertopolkaLF/codex-minibar"
-homepage = "https://github.com/vertopolkaLF/codex-minibar"
+repository = "https://github.com/jrkerns/codex-minibar-pace"
+homepage = "https://github.com/jrkerns/codex-minibar-pace"
 readme = "README.md"
 keywords = ["codex", "windows", "tray", "usage", "gpui"]
 categories = ["command-line-utilities", "gui"]
+
+[[bin]]
+name = "codex-minibar-pace"
+path = "src/main.rs"
 
 [dependencies]
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }

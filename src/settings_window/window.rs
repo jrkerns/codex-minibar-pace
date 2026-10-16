@@ -267,6 +267,8 @@ impl SettingsWindow {
         edit: impl Fn(&mut Settings) + Send + 'static,
     ) {
         edit(&mut self.settings);
+        crate::pace::publish(&self.settings.weekly_work_schedule);
+        crate::pace::publish_intervals(&self.settings.instances);
         self.settings.language.apply();
         cx.refresh_windows();
         self.settings.normalize_tray_widgets();
