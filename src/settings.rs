@@ -1917,7 +1917,7 @@ impl TaskbarWidget {
     pub fn weekly_pace(provider: ProviderId) -> Self {
         Self {
             style: TaskbarWidgetStyle::WeeklyPace,
-            indicators: vec![TrayIndicator::new(provider, "codex.weekly")],
+            indicators: vec![TrayIndicator::new(provider, weekly_metric(provider))],
             ..Self::for_provider(provider)
         }
     }
@@ -1950,9 +1950,9 @@ impl TaskbarWidget {
         if self.style == TaskbarWidgetStyle::WeeklyPace {
             let provider = self
                 .provider()
-                .filter(|provider| provider.kind() == ProviderKind::Codex)
+                .filter(|provider| crate::pace::supports(provider.kind()))
                 .unwrap_or_else(|| ProviderId::primary(ProviderKind::Codex));
-            let indicators = vec![TrayIndicator::new(provider, "codex.weekly")];
+            let indicators = vec![TrayIndicator::new(provider, weekly_metric(provider))];
             if self.indicators != indicators {
                 self.indicators = indicators;
                 changed = true;
@@ -2017,10 +2017,27 @@ impl TaskbarWidget {
     }
 }
 
+pub(crate) fn weekly_metric(provider: ProviderId) -> &'static str {
+    if provider.kind() == ProviderKind::Claude {
+        "claude.weekly"
+    } else {
+        "codex.weekly"
+    }
+}
+
+fn rotate_weekly_default() -> bool {
+    true
+}
+
 /// Live widgets drawn inside the Windows taskbar.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TaskbarSettings {
+    /// Rotate the weekly widget between enabled Codex and Claude accounts.
+    #[serde(default = "rotate_weekly_default")]
+    pub rotate_weekly: bool,
+    /// One-time discovery; subsequently respect explicit provider disablement.
+    pub claude_detection_done: bool,
     pub enabled: bool,
     pub alignment: TaskbarAlignment,
     /// Shows one widget at a time; the scroll wheel over it switches.
@@ -2293,6 +2310,7 @@ impl Default for Settings {
         let codex = ProviderId::primary(ProviderKind::Codex);
         settings.taskbar.widgets = vec![TaskbarWidget::weekly_pace(codex)];
         settings.taskbar.click = TaskbarClick::Tab;
+        settings.taskbar.rotate_weekly = true;
         settings
     }
 }
@@ -2317,6 +2335,55 @@ impl Settings {
             changed = true;
         }
         changed
+    }
+
+    /// Discover Claude without launching its CLI or changing an existing account.
+    pub fn discover_weekly_claude(&mut self) -> bool {
+        if self.taskbar.claude_detection_done
+            || !self.taskbar.rotate_weekly
+            || !self
+                .taskbar
+                .widgets
+                .iter()
+                .any(|w| w.style == TaskbarWidgetStyle::WeeklyPace)
+        {
+            return false;
+        }
+        let enabled = self
+            .instances
+            .iter()
+            .any(|i| i.driver == ProviderKind::Claude && i.enabled);
+        let path = self
+            .instances
+            .iter()
+            .find(|i| i.driver == ProviderKind::Claude)
+            .and_then(|i| i.binary_path.as_deref());
+        self.enable_discovered_claude(enabled || crate::claude::is_installed(path))
+    }
+
+    fn enable_discovered_claude(&mut self, installed: bool) -> bool {
+        if self.taskbar.claude_detection_done || !installed {
+            return false;
+        }
+        self.taskbar.claude_detection_done = true;
+        if !self
+            .instances
+            .iter()
+            .any(|i| i.driver == ProviderKind::Claude && i.enabled)
+        {
+            if let Some(instance) = self
+                .instances
+                .iter_mut()
+                .find(|i| i.driver == ProviderKind::Claude && i.is_primary())
+            {
+                instance.enabled = true;
+            } else {
+                let mut instance = ProviderInstance::primary(ProviderKind::Claude);
+                instance.enabled = true;
+                self.instances.push(instance);
+            }
+        }
+        true
     }
 
     pub fn default_path() -> Result<PathBuf> {
@@ -4765,5 +4832,64 @@ mod weekly_pace_tests {
         let (decoded, _) = Settings::decode_raw(&toml::to_string(&s).unwrap()).unwrap();
         assert_eq!(s.weekly_work_schedule, decoded.weekly_work_schedule);
         assert_eq!(s.taskbar, decoded.taskbar);
+    }
+}
+
+#[cfg(test)]
+mod claude_pace_tests {
+    use super::*;
+    #[test]
+    fn upgrade_enables_rotation_without_changing_existing_layout() {
+        let mut s = Settings::default();
+        let original = s.taskbar.widgets.clone();
+        let mut value = toml::Value::try_from(&s).unwrap();
+        value
+            .get_mut("taskbar")
+            .unwrap()
+            .as_table_mut()
+            .unwrap()
+            .remove("rotate_weekly");
+        let (decoded, _) = Settings::decode_raw(&toml::to_string(&value).unwrap()).unwrap();
+        assert!(decoded.taskbar.rotate_weekly);
+        assert_eq!(decoded.taskbar.widgets, original);
+        assert!(!s.enable_discovered_claude(false));
+        assert!(!s.taskbar.claude_detection_done);
+        assert!(s.enable_discovered_claude(true));
+        let claude = s
+            .instances
+            .iter_mut()
+            .find(|i| i.driver == ProviderKind::Claude && i.enabled)
+            .unwrap();
+        claude.enabled = false;
+        assert!(!s.enable_discovered_claude(true));
+        assert!(
+            !s.instances
+                .iter()
+                .any(|i| i.driver == ProviderKind::Claude && i.enabled)
+        );
+        assert_eq!(s.taskbar.widgets, original);
+    }
+    #[test]
+    fn claude_widget_normalization_preserves_its_provider_and_metric() {
+        let provider = ProviderId::primary(ProviderKind::Claude);
+        let mut widget = TaskbarWidget::weekly_pace(provider);
+        assert!(!widget.normalize());
+        assert_eq!(widget.provider(), Some(provider));
+        assert_eq!(widget.indicators[0].metric_id, "claude.weekly");
+    }
+    #[test]
+    fn discovery_preserves_an_existing_claude_account() {
+        let mut s = Settings::default();
+        s.instances.retain(|i| i.driver != ProviderKind::Claude);
+        let account = ProviderInstance::new(ProviderKind::Claude, "Work");
+        s.instances.push(account.clone());
+        assert!(s.enable_discovered_claude(true));
+        assert_eq!(
+            s.instances
+                .iter()
+                .filter(|i| i.driver == ProviderKind::Claude)
+                .collect::<Vec<_>>(),
+            vec![&account]
+        );
     }
 }

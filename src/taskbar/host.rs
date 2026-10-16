@@ -640,6 +640,7 @@ struct Host {
     tracking: bool,
     frame_timer: bool,
     minute: i64,
+    rotation: model::WeeklyRotation,
     /// Widget id, offset and length along the taskbar in DIPs of the last
     /// frame, for hit testing.
     hits: Vec<(String, f32, f32)>,
@@ -671,6 +672,7 @@ impl Host {
             tracking: false,
             frame_timer: false,
             minute: Utc::now().timestamp() / 60,
+            rotation: model::WeeklyRotation::new(Instant::now()),
             hits: Vec::new(),
             placed: None,
             shown: false,
@@ -706,6 +708,14 @@ impl Host {
         );
         let minute = Utc::now().timestamp() / 60;
         let obstacles = super::obstacles::latest();
+        let rotating = self
+            .config
+            .as_ref()
+            .is_some_and(|c| c.taskbar.enabled && c.taskbar.rotate_weekly);
+        let paused = self.hover.is_some()
+            || self.pressed.is_some()
+            || self.card.as_ref().is_some_and(|c| !c.closing);
+        let rotate = self.rotation.tick(Instant::now(), rotating, paused);
         let window_lost = !self.window.is_null() && unsafe { IsWindow(self.window) } == 0;
         if window_lost {
             // Explorer restarted and destroyed the child with its taskbar.
@@ -713,7 +723,8 @@ impl Host {
             self.placed = None;
             self.shown = false;
         }
-        if geometry != self.geometry
+        if rotate
+            || geometry != self.geometry
             || appearance != self.appearance
             || minute != self.minute
             || obstacles != self.obstacles
@@ -754,7 +765,15 @@ impl Host {
         };
         let views = match (&self.config, self.geometry) {
             (Some(config), Some(_)) if config.taskbar.enabled => model::resolve_visible(
-                &config.taskbar.widgets,
+                &if config.taskbar.rotate_weekly {
+                    model::rotated_widgets(
+                        &config.taskbar.widgets,
+                        &crate::instances::published_enabled_providers(),
+                        self.rotation.turn,
+                    )
+                } else {
+                    config.taskbar.widgets.clone()
+                },
                 &crate::instances::published_enabled_providers(),
                 &self.limits,
                 self.appearance,

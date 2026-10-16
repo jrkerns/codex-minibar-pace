@@ -274,7 +274,7 @@ impl SettingsWindow {
                     .into_any_element(),
             );
             rows.push(div().px(px(18.0)).pb(px(12.0))
-                .child(kit::caption(k, "Weekly Codex quota only. Schedule changes recalculate the whole quota window."))
+                .child(kit::caption(k, "Weekly Codex and Claude quotas only. Schedule changes recalculate the whole quota window."))
                 .into_any_element());
             rows
         })
@@ -542,6 +542,19 @@ impl SettingsWindow {
                 ),
                 kit::toggle_row(
                     k,
+                    "weekly-provider-rotation",
+                    "Rotate Codex and Claude",
+                    Some("Switch weekly pace every 5 seconds. Hover to pause. Enable accounts in Providers.".into()),
+                    taskbar.rotate_weekly,
+                    Self::h(cx, |this, value: bool, _, cx| {
+                        this.edit(cx, move |settings| {
+                            settings.taskbar.rotate_weekly = value;
+                            if value { settings.discover_weekly_claude(); }
+                        })
+                    }),
+                ),
+                kit::toggle_row(
+                    k,
                     "taskbar-cycle",
                     crate::i18n::tr("taskbar-cycle"),
                     Some(crate::i18n::tr("taskbar-cycle-description").into()),
@@ -553,8 +566,12 @@ impl SettingsWindow {
             ]
         }));
 
-        let mut visible = taskbar
-            .widgets
+        let preview_widgets = if taskbar.rotate_weekly {
+            crate::taskbar::model::rotated_widgets(&taskbar.widgets, &enabled_providers, 0)
+        } else {
+            taskbar.widgets.clone()
+        };
+        let mut visible = preview_widgets
             .iter()
             .filter(|widget| widget.is_visible_for(&self.settings.instances))
             .cloned()
@@ -851,7 +868,7 @@ impl SettingsWindow {
             let providers = self
                 .enabled_taskbar_providers()
                 .into_iter()
-                .filter(|provider| provider.kind() == crate::settings::ProviderKind::Codex)
+                .filter(|provider| crate::pace::supports(provider.kind()))
                 .collect::<Vec<_>>();
             let labels = providers
                 .iter()
@@ -864,8 +881,8 @@ impl SettingsWindow {
             kit::dropdown_row(
                 k,
                 "weekly-pace-account",
-                "Codex account",
-                Some("Always shows this account's weekly allowance."),
+                "Provider account",
+                Some("Preferred account; rotation also shows the other enabled provider."),
                 labels,
                 selected,
                 providers.is_empty(),
@@ -873,8 +890,10 @@ impl SettingsWindow {
                     if let Some(provider) = providers.get(choice).copied() {
                         this.update_taskbar_widgets(cx, |widgets| {
                             if let Some(widget) = widgets.get_mut(index) {
-                                widget.indicators =
-                                    vec![TrayIndicator::new(provider, "codex.weekly")];
+                                widget.indicators = vec![TrayIndicator::new(
+                                    provider,
+                                    crate::settings::weekly_metric(provider),
+                                )];
                             }
                         });
                     }

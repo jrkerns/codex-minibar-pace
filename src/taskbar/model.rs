@@ -300,10 +300,10 @@ fn resolve_row(
         }
         _ => full_label.clone(),
     };
-    let is_weekly = indicator.metric_id == "codex.weekly"
+    let is_weekly = indicator.metric_id == crate::settings::weekly_metric(provider)
         && metric
             .as_ref()
-            .is_some_and(|metric| metric.resolved_id == "codex.weekly");
+            .is_some_and(|metric| metric.resolved_id == crate::settings::weekly_metric(provider));
     let window = metric.map(|metric| metric.window).unwrap_or_default();
     let snapshot = limits.get(provider);
     let pace = crate::pace::tip(
@@ -314,8 +314,8 @@ fn resolve_row(
         now,
     )
     .filter(|_| {
-        provider.kind() != crate::settings::ProviderKind::Codex
-            || indicator.metric_id != "codex.weekly"
+        !crate::pace::supports(provider.kind())
+            || indicator.metric_id != crate::settings::weekly_metric(provider)
             || !crate::pace::current().enabled
             || crate::pace::is_fresh(provider, snapshot.sampled_at, now)
     })
@@ -486,7 +486,7 @@ fn card_sections(
                     .map(crate::popup_window::capitalize_plan_name),
                 rows,
                 today: today_usage(provider, &provider_limits.usage),
-                details: if provider.kind() == crate::settings::ProviderKind::Codex
+                details: if crate::pace::supports(provider.kind())
                     && (crate::pace::current().enabled
                         || widget.style == TaskbarWidgetStyle::WeeklyPace)
                 {
@@ -981,5 +981,198 @@ mod tests {
                 .iter()
                 .any(|line| line.contains("Stale"))
         );
+    }
+}
+
+/// Keep the configured widget identity (including its settings action), replacing
+/// all provider-dependent content together before resolving the view.
+pub(crate) fn rotated_widgets(
+    widgets: &[TaskbarWidget],
+    enabled: &[ProviderId],
+    turn: usize,
+) -> Vec<TaskbarWidget> {
+    widgets
+        .iter()
+        .cloned()
+        .map(|mut widget| {
+            if widget.style != TaskbarWidgetStyle::WeeklyPace {
+                return widget;
+            }
+            let preferred = widget.provider().filter(|p| enabled.contains(p));
+            let first = preferred.or_else(|| {
+                enabled
+                    .iter()
+                    .copied()
+                    .find(|p| crate::pace::supports(p.kind()))
+            });
+            if let Some(first) = first {
+                let other = enabled
+                    .iter()
+                    .copied()
+                    .find(|p| crate::pace::supports(p.kind()) && p.kind() != first.kind());
+                let provider = if turn % 2 == 1 {
+                    other.unwrap_or(first)
+                } else {
+                    first
+                };
+                widget.indicators = vec![TrayIndicator::new(
+                    provider,
+                    crate::settings::weekly_metric(provider),
+                )];
+            }
+            widget
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod rotation_tests {
+    use super::*;
+    use crate::settings::ProviderKind;
+    #[test]
+    fn every_provider_combination_rotates_only_supported_weekly_widgets() {
+        let c = ProviderId::primary(ProviderKind::Codex);
+        let a = ProviderId::primary(ProviderKind::Claude);
+        let other = ProviderId::primary(ProviderKind::Cursor);
+        let weekly = TaskbarWidget::weekly_pace(c);
+        let ordinary = TaskbarWidget::for_provider(other);
+        for enabled in [
+            vec![],
+            vec![c],
+            vec![a],
+            vec![c, a],
+            vec![a, c],
+            vec![c, a, other],
+            vec![other],
+        ] {
+            for turn in 0..4 {
+                let widgets = rotated_widgets(&[weekly.clone(), ordinary.clone()], &enabled, turn);
+                assert_eq!(widgets[0].id, weekly.id);
+                assert_eq!(widgets[1], ordinary);
+                let views = resolve_visible(
+                    &widgets,
+                    &enabled,
+                    &ProviderLimits::default(),
+                    Appearance {
+                        light: true,
+                        colored_icons: true,
+                        accent: [0, 120, 212],
+                    },
+                );
+                if let Some(view) = views
+                    .iter()
+                    .find(|v| v.style == TaskbarWidgetStyle::WeeklyPace)
+                {
+                    let expected =
+                        if enabled.contains(&c) && (turn % 2 == 0 || !enabled.contains(&a)) {
+                            c
+                        } else {
+                            a
+                        };
+                    assert_eq!(view.provider, Some(expected));
+                    assert_eq!(view.rows[0].provider, expected);
+                    assert_eq!(view.card[0].provider, expected);
+                    assert_eq!(view.weekly_pace.as_ref().unwrap().value, "—");
+                    assert_eq!(
+                        view.icon.as_ref(),
+                        Some(&icon_for(
+                            expected,
+                            Appearance {
+                                light: true,
+                                colored_icons: true,
+                                accent: [0, 120, 212]
+                            }
+                        ))
+                    );
+                } else {
+                    assert!(!enabled.contains(&c) && !enabled.contains(&a));
+                }
+            }
+        }
+    }
+    #[test]
+    fn rotation_resolves_each_providers_own_quota_and_reset() {
+        let c = ProviderId::primary(ProviderKind::Codex);
+        let a = ProviderId::primary(ProviderKind::Claude);
+        let now = Utc::now();
+        let mut limits = ProviderLimits::default();
+        for (provider, used, days) in [(c, 20, 2), (a, 60, 4)] {
+            let snapshot = limits.get_mut(provider);
+            snapshot.sampled_at = now;
+            snapshot.secondary = crate::limits::LimitWindow {
+                used_percent: Some(used),
+                duration_minutes: Some(10080),
+                resets_at: Some(now + chrono::Duration::days(days)),
+            };
+        }
+        let widget = TaskbarWidget::weekly_pace(c);
+        for (turn, provider, remaining) in [(0, c, "80%"), (1, a, "40%"), (2, c, "80%")] {
+            let widgets = rotated_widgets(std::slice::from_ref(&widget), &[c, a], turn);
+            let view = resolve(
+                &widgets[0],
+                &limits,
+                Appearance {
+                    light: true,
+                    colored_icons: true,
+                    accent: [0, 120, 212],
+                },
+            );
+            assert_eq!(view.rows[0].value, remaining);
+            assert_eq!(
+                view.rows[0].resets_at,
+                limits.get(provider).secondary.resets_at
+            );
+            assert_ne!(view.weekly_pace.as_ref().unwrap().value, "—");
+            assert!(!view.card[0].details.is_empty());
+        }
+    }
+}
+
+/// A monotonic clock: quota refreshes and wall-clock changes never restart a turn.
+#[cfg(any(windows, test))]
+pub(crate) struct WeeklyRotation {
+    pub(crate) turn: usize,
+    since: std::time::Instant,
+}
+#[cfg(any(windows, test))]
+impl WeeklyRotation {
+    pub(crate) fn new(now: std::time::Instant) -> Self {
+        Self {
+            turn: 0,
+            since: now,
+        }
+    }
+    pub(crate) fn tick(&mut self, now: std::time::Instant, enabled: bool, paused: bool) -> bool {
+        if !enabled || paused {
+            self.since = now;
+            return false;
+        }
+        if now.duration_since(self.since) < std::time::Duration::from_secs(5) {
+            return false;
+        }
+        self.turn = self.turn.wrapping_add(1);
+        self.since = now;
+        true
+    }
+}
+#[cfg(test)]
+mod rotation_clock_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+    #[test]
+    fn rotation_waits_five_seconds_and_restarts_after_interaction() {
+        let start = Instant::now();
+        let mut clock = WeeklyRotation::new(start);
+        assert!(!clock.tick(start + Duration::from_millis(4999), true, false));
+        assert!(clock.tick(start + Duration::from_secs(5), true, false));
+        assert_eq!(clock.turn, 1);
+        assert!(!clock.tick(start + Duration::from_secs(10), true, true));
+        assert!(!clock.tick(start + Duration::from_secs(14), true, false));
+        assert!(clock.tick(start + Duration::from_secs(15), true, false));
+        assert_eq!(clock.turn, 2);
+        assert!(!clock.tick(start + Duration::from_secs(60), false, false));
+        assert!(!clock.tick(start + Duration::from_secs(64), true, false));
+        assert!(clock.tick(start + Duration::from_secs(65), true, false));
+        assert_eq!(clock.turn, 3);
     }
 }

@@ -230,7 +230,7 @@ fn tip_with_schedule(
     now: DateTime<Utc>,
     schedule: &WorkSchedule,
 ) -> Option<PaceTip> {
-    if provider.kind() != ProviderKind::Codex || !weekly || !schedule.enabled {
+    if !supports(provider.kind()) || !weekly || !schedule.enabled {
         return window.pace_tip(show_used, now);
     }
     if FAILED
@@ -262,7 +262,7 @@ pub fn card_tip(
     let Some(provider) = ProviderId::lookup(id) else {
         return window.pace_tip(show_used, now);
     };
-    if provider.kind() == ProviderKind::Codex && metric == "weekly" && current().enabled {
+    if supports(provider.kind()) && metric == "weekly" && current().enabled {
         let sampled_at = SAMPLES
             .read()
             .unwrap_or_else(|e| e.into_inner())
@@ -467,9 +467,10 @@ mod tests {
         for provider in [
             ProviderId::primary(ProviderKind::Codex),
             ProviderId::primary(ProviderKind::Claude),
+            ProviderId::primary(ProviderKind::Cursor),
         ] {
             for weekly in [false, true] {
-                if provider.kind() == ProviderKind::Codex && weekly {
+                if supports(provider.kind()) && weekly {
                     continue;
                 }
                 for show_used in [false, true] {
@@ -492,5 +493,48 @@ mod tests {
             ),
             w.pace_tip(false, now)
         );
+    }
+}
+
+/// Providers with a comparable all-model weekly allowance.
+pub(crate) fn supports(kind: ProviderKind) -> bool {
+    matches!(kind, ProviderKind::Codex | ProviderKind::Claude)
+}
+
+#[cfg(test)]
+mod claude_tests {
+    use super::*;
+    #[test]
+    fn claude_weekly_uses_the_same_work_schedule_as_codex() {
+        let now = Utc::now();
+        let window = LimitWindow {
+            used_percent: Some(30),
+            duration_minutes: Some(10080),
+            resets_at: Some(now + Duration::days(3)),
+        };
+        let schedule = WorkSchedule {
+            enabled: true,
+            ..WorkSchedule::default()
+        };
+        for show_used in [false, true] {
+            let codex = tip_with_schedule(
+                ProviderId::primary(ProviderKind::Codex),
+                true,
+                &window,
+                show_used,
+                now,
+                &schedule,
+            );
+            let claude = tip_with_schedule(
+                ProviderId::primary(ProviderKind::Claude),
+                true,
+                &window,
+                show_used,
+                now,
+                &schedule,
+            );
+            assert!(claude.is_some());
+            assert_eq!(claude, codex);
+        }
     }
 }

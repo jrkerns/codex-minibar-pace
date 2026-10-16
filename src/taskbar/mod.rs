@@ -369,3 +369,63 @@ mod tests {
         }
     }
 }
+
+#[cfg(all(test, windows))]
+mod rotation_previews {
+    use super::*;
+    use crate::{
+        limits::{LimitWindow, RateLimits},
+        settings::{ProviderKind, TaskbarWidget},
+    };
+    #[test]
+    fn both_rotation_frames_render_at_common_scales_and_themes() {
+        let c = ProviderId::primary(ProviderKind::Codex);
+        let a = ProviderId::primary(ProviderKind::Claude);
+        let now = chrono::Utc::now();
+        let limits = ProviderLimits::from_entries([c, a].into_iter().map(|provider| {
+            (
+                provider,
+                RateLimits {
+                    sampled_at: now,
+                    secondary: LimitWindow {
+                        used_percent: Some(if provider == c { 30 } else { 60 }),
+                        duration_minutes: Some(10080),
+                        resets_at: Some(now + chrono::Duration::days(3)),
+                    },
+                    ..RateLimits::default()
+                },
+            )
+        }));
+        let widgets = vec![TaskbarWidget::weekly_pace(c)];
+        for turn in 0..2 {
+            for light in [false, true] {
+                for scale in [1.0, 1.25, 1.5, 2.0] {
+                    for height in [40.0, 48.0, 64.0] {
+                        let rotated = model::rotated_widgets(&widgets, &[c, a], turn);
+                        let image = preview(
+                            &rotated,
+                            &limits,
+                            model::Appearance {
+                                light,
+                                colored_icons: true,
+                                accent: [0, 120, 212],
+                            },
+                            scale,
+                            height,
+                        )
+                        .unwrap();
+                        assert!(image.width >= 100.0 && image.width < 400.0);
+                        if let Ok(dir) = std::env::var("TASKBAR_PREVIEW_DIR") {
+                            std::fs::write(
+                                std::path::Path::new(&dir)
+                                    .join(format!("rotation-{turn}-{light}-{height}-{scale}.png")),
+                                image.png,
+                            )
+                            .unwrap();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

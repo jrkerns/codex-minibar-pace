@@ -28,6 +28,9 @@ fn run() -> Result<()> {
         eprintln!("failed to hydrate pricing catalog: {error:#}");
     }
     let mut settings = Settings::load_or_create(&path)?;
+    if settings.discover_weekly_claude() {
+        settings.save(&path)?;
+    }
     settings.language.apply();
     let just_updated = show_post_update_success_if_needed();
     if let Err(error) = settings.reconcile_startup_from_registry(&path) {
